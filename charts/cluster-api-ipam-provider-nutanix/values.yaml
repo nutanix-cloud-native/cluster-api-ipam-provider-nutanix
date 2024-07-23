@@ -1,0 +1,45 @@
+# Copyright 2024 Nutanix. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+deployment:
+  replicas: 1
+
+image:
+  repository: ghcr.io/nutanix-cloud-native/cluster-api-ipam-provider-nutanix
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# -- Optional secrets used for pulling the container image
+imagePullSecrets: []
+# - name: Secret with Registry credentials
+
+env: {}
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+securityContext:
+  runAsUser: 65532
+
+nodeSelector: {}
+  # -- Kubernetes node selector: node labels for pod assignment
+  # Allow scheduling of Deployment on linux nodes only
+  # kubernetes.io/os: linux
+
+# -- Kubernetes pod tolerations
+tolerations:
+  - key: node-role.kubernetes.io/master
+    operator: Equal
+    effect: NoSchedule
+  - key: node-role.kubernetes.io/control-plane
+    operator: Equal
+    effect: NoSchedule
+  # Allow scheduling of Deployment on all nodes
+  # - operator: "Exists"
+
+# -- Priority class to be used for the pod.
+priorityClassName: system-cluster-critical

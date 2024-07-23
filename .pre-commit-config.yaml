@@ -1,0 +1,132 @@
+# Copyright 2023 Nutanix. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+repos:
+- repo: local
+  hooks:
+  - id: schema-chart
+    name: schema-chart
+    entry: make schema-chart
+    language: system
+    files: "^charts/[^/]+/values.yaml$"
+  - id: golangci-lint
+    name: golangci-lint
+    entry: make go-generate lint
+    language: system
+    files: "(.*\\.go|go.mod|go.sum|go.mk)$"
+    pass_filenames: false
+  - id: chart-docs
+    name: chart-docs
+    entry: make chart-docs
+    language: system
+    files: "^charts/"
+    pass_filenames: false
+  - id: hugo-mod-tidy
+    name: hugo-mod-tidy
+    entry: bash -c "cd docs && hugo mod tidy"
+    language: system
+    files: "^docs/"
+    pass_filenames: false
+  - id: check-devbox-lock
+    name: check-devbox-lock
+    entry: devbox install
+    language: system
+    files: "^devbox.(yaml|lock)$"
+    pass_filenames: false
+- repo: https://github.com/tekwizely/pre-commit-golang
+  rev: v1.0.0-rc.1
+  hooks:
+  - id: go-mod-tidy
+    exclude: ^docs/
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.6.0
+  hooks:
+  - id: trailing-whitespace
+    stages: [commit]
+  - id: check-yaml
+    args: ["-m", "--unsafe"]
+    stages: [commit]
+    exclude: ^charts/.+/templates/
+  - id: mixed-line-ending
+    args: ["-f", "lf"]
+    exclude: \.bat$
+    stages: [commit]
+  - id: no-commit-to-branch
+    stages: [commit]
+  - id: check-added-large-files
+    stages: [commit]
+  - id: check-case-conflict
+    stages: [commit]
+  - id: check-merge-conflict
+    stages: [commit]
+  - id: check-executables-have-shebangs
+    stages: [commit]
+  - id: check-symlinks
+    stages: [commit]
+  - id: end-of-file-fixer
+    stages: [commit]
+    exclude: ^charts/[^/]+/README.md$
+- repo: https://github.com/rhysd/actionlint
+  rev: v1.7.1
+  hooks:
+  - id: actionlint-system
+    stages: [commit]
+- repo: https://github.com/jorisroovers/gitlint
+  rev: v0.19.1
+  hooks:
+  - id: gitlint
+  - id: gitlint-ci
+    args: ["--commits", "origin/main..HEAD"]
+- repo: https://github.com/jumanjihouse/pre-commit-hooks
+  rev: 3.0.0
+  hooks:
+  - id: shfmt
+    stages: [commit]
+    args: ["-s", "-i", "2"]
+  - id: script-must-have-extension
+    stages: [commit]
+- repo: https://github.com/shellcheck-py/shellcheck-py
+  rev: v0.10.0.1
+  hooks:
+  - id: shellcheck
+    stages: [commit]
+    args: ["-e", "SC2211", "-x"]
+- repo: https://github.com/igorshubovych/markdownlint-cli
+  rev: v0.41.0
+  hooks:
+  - id: markdownlint
+    stages: [commit]
+    exclude: ^(CHANGELOG.md|charts/[^/]+/README.md|.github/pull_request_template.md)$
+- repo: https://github.com/Lucas-C/pre-commit-hooks
+  rev: v1.5.5
+  hooks:
+  - id: insert-license
+    name: License headers - Go
+    stages: [commit]
+    files: "(.*\\.go|go.mod)$"
+    args:
+      - --license-filepath
+      - hack/license-header.txt
+      - --comment-style
+      - //
+      - --allow-past-years
+  - id: insert-license
+    name: License headers - YAML and Makefiles
+    stages: [commit]
+    files: (^Makefile|\.(ya?ml|mk))$
+    exclude: ^docs/static/helm/index\.yaml$
+    args:
+      - --license-filepath
+      - hack/license-header.txt
+      - --allow-past-years
+  - id: insert-license
+    name: License headers - Markdown
+    stages: [commit]
+    files: \.md$
+    exclude: ^(CHANGELOG.md$|docs/|.github/pull_request_template.md$)
+    args:
+      - --license-filepath
+      - hack/license-header.txt
+      - --comment-style
+      - <!--|| -->
+      - --allow-past-years
