@@ -1,0 +1,112 @@
+# Copyright 2024 Nutanix. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+version: 2
+
+project_name: cluster-api-ipam-provider-nutanix
+
+changelog:
+  use: github
+  groups:
+    - title: Features
+      regexp: "^.*feat[(\\w)]*:+.*$"
+      order: 0
+    - title: 'Bug fixes'
+      regexp: "^.*fix[(\\w)]*:+.*$"
+      order: 1
+  filters:
+    exclude:
+      - '^docs:'
+      - '^chore:'
+      - '^build:'
+
+release:
+  footer: |
+    ### Summary
+    **Full Changelog**: https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+archives:
+  - name_template: '{{ .ProjectName }}_v{{trimprefix .Version "v"}}_{{ .Os }}_{{ .Arch }}'
+    format_overrides:
+      - goos: windows
+        format: zip
+
+before:
+  hooks:
+    - |
+      sh -ec 'cat <<EOF > ipam-components.yaml
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: caipamn-system
+      $(helm template {{ .ProjectName }} ./charts/{{ .ProjectName }} \
+        --namespace caipamn-system \
+        --include-crds \
+        --set-string image.tag=v{{ trimprefix .Version "v" }}{{ if .IsSnapshot }}-{{ .Runtime.Goarch }} \
+        --set-string image.repository=ko.local/{{ .ProjectName }}{{ end }} \
+      )
+      EOF'
+    - sed -i -e 's/\${/$${/g' -e 's/v0.0.0-dev/v{{ trimprefix .Version "v" }}/g' ipam-components.yaml
+    - |
+      sh -ec 'gojq --yaml-input --yaml-output \
+        ".releaseSeries |= (. + [{contract: \"v1beta1\", major: {{ .Major }}, minor: {{ .Minor }}}] | unique)" \
+        metadata.yaml >release-metadata.yaml'
+
+builds:
+  - id: capi-ipam-nutanix
+    dir: ./cmd
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s
+      - -w
+      - -X 'k8s.io/component-base/version.buildDate={{ .CommitDate }}'
+      - -X 'k8s.io/component-base/version.gitCommit={{ .FullCommit }}'
+      - -X 'k8s.io/component-base/version.gitTreeState={{ .Env.GIT_TREE_STATE }}'
+      - -X 'k8s.io/component-base/version.gitVersion=v{{ trimprefix .Version "v" }}'
+      - -X 'k8s.io/component-base/version.major={{ .Major }}'
+      - -X 'k8s.io/component-base/version.minor={{ .Minor }}'
+      - -X 'k8s.io/component-base/version/verflag.programName={{ .ProjectName }}'
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    hooks:
+      post:
+        - |
+          sh -ec 'if [ {{ .IsSnapshot }} == true ] && [ {{ .Runtime.Goarch }} == {{ .Arch }} ]; then
+            env SOURCE_DATE_EPOCH=$(date +%s) \
+                KO_DATA_DATE_EPOCH=$(date +%s) \
+                KO_DOCKER_REPO=ko.local/{{ .ProjectName }} \
+                ko build \
+                  --bare \
+                  --platform linux/{{ .Arch }} \
+                  -t v{{ trimprefix .Version "v" }}-{{ .Arch }} \
+                  ./cmd
+          fi'
+
+kos:
+  - build: capi-ipam-nutanix
+    labels:
+      org.opencontainers.image.created: "{{ .CommitDate }}"
+      org.opencontainers.image.title: "{{ .ProjectName}}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.version: v{{trimprefix .Version "v"}}
+      org.opencontainers.image.source: "{{ .GitURL }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    repository: ghcr.io/nutanix-cloud-native/{{ .ProjectName}}
+    bare: true
+    tags:
+      - v{{trimprefix .Version "v"}}
+
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ incminor .Tag }}-dev"
+report_sizes: true

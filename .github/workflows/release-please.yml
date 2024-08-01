@@ -1,0 +1,32 @@
+# Copyright 2023 Nutanix. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: release-please-main
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release-please:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: google-github-actions/release-please-action@v4
+        id: release-please
+
+      - if: ${{ steps.release-please.outputs.release_created }}
+        name: Run release workflow
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: release-tag.yml
+          ref: ${{ steps.release-please.outputs.tag_name }}
