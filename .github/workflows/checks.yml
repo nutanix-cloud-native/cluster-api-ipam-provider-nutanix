@@ -56,10 +56,6 @@ jobs:
 
   lint-go:
     runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        module: [api, common, .]
-      fail-fast: false
     permissions:
       pull-requests: write
     steps:
@@ -84,7 +80,6 @@ jobs:
           reporter: github-pr-review
           golangci_lint_version: v${{ steps.versions.outputs.golangci-lint }}
           go_version: v${{ steps.versions.outputs.golang }}
-          workdir: ${{ matrix.module }}
           golangci_lint_flags: "--config=${{ github.workspace }}/.golangci.yml"
 
   lint-gha:
@@ -181,7 +176,7 @@ jobs:
           devbox run -- \
             kind load docker-image \
               --name "${KIND_CLUSTER_NAME}" \
-              "ko.local/${{ github.event.repository.name }}:$(devbox run -- gojq -r '.version+"-"+.runtime.arch' dist/metadata.json)"
+              "ko.local/${{ github.event.repository.name }}:$(devbox run -- gojq -r '.version+"-"+.runtime.goarch' dist/metadata.json)"
 
       - if: steps.list-changed.outputs.changed == 'true'
         name: Setup Cluster API and cert-manager
@@ -193,7 +188,7 @@ jobs:
           devbox run -- \
             ct install \
               --config charts/ct-config.yaml \
-              --helm-extra-set-args "--set-string image.repository=ko.local/${{ github.event.repository.name }} --set-string image.tag=$(devbox run -- gojq -r '.version+"-"+.runtime.arch' dist/metadata.json)"
+              --helm-extra-set-args "--set-string image.repository=ko.local/${{ github.event.repository.name }} --set-string image.tag=$(devbox run -- gojq -r '.version+"-"+.runtime.goarch' dist/metadata.json)"
         env:
           KUBECONFIG: ${{ env.KIND_KUBECONFIG }}
 
