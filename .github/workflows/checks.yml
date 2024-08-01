@@ -57,6 +57,7 @@ jobs:
   lint-go:
     runs-on: ubuntu-22.04
     permissions:
+      contents: read
       pull-requests: write
     steps:
       - name: Check out code
@@ -85,6 +86,7 @@ jobs:
   lint-gha:
     runs-on: ubuntu-22.04
     permissions:
+      contents: read
       pull-requests: write
     steps:
       - name: Check out code
