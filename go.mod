@@ -5,11 +5,9 @@ module github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix
 
 go 1.22.5
 
-replace github.com/nutanix-cloud-native/prism-go-client => ../prism-go-client
-
 require (
 	github.com/google/uuid v1.5.0
-	github.com/nutanix-cloud-native/prism-go-client v0.4.1-0.20240724085708-085539aefdb7
+	github.com/nutanix-cloud-native/prism-go-client v0.4.1-0.20240801110437-3351795b4a59
 	github.com/nutanix/ntnx-api-golang-clients/prism-go-client/v4 v4.0.1-beta.1
 	github.com/onsi/ginkgo/v2 v2.17.1
 	github.com/onsi/gomega v1.32.0
