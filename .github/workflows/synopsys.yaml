@@ -20,6 +20,9 @@ on:
       # Ignore source dependencies of build tooling.
       - '!docs/go.mod'
 
+env:
+  GH_TOKEN: ${{ github.token }}
+
 jobs:
   security:
     if: github.repository == 'nutanix-cloud-native/cluster-api-ipam-provider-nutanix'
