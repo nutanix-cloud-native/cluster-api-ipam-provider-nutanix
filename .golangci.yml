@@ -22,6 +22,7 @@ linters:
     - gocyclo
     - godot
     - gofumpt
+    - gomoddirectives
     - gosec
     - gosimple
     - govet
@@ -71,6 +72,9 @@ linters-settings:
       - style
   gofumpt:
     extra-rules: true
+  gomoddirectives:
+    replace-allow-list:
+      - github.com/nutanix-cloud-native/prism-go-client
   importas:
     no-unaliased: false
     alias:
