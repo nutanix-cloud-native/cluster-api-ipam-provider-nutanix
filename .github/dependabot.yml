@@ -18,6 +18,8 @@ updates:
         patterns: [ "*" ]
         update-types: [ "patch", "minor" ]
     ignore:
+    # Ignore prism-go-client until there is a released version with the adapter client.
+    - dependency-name: "github.com/nutanix-cloud-native/prism-go-client"
     # Ignore controller-runtime major and minor as it's upgraded together with sigs.k8s.io/cluster-api.
     - dependency-name: "sigs.k8s.io/controller-runtime"
       update-types: [ "version-update:semver-major", "version-update:semver-minor" ]
