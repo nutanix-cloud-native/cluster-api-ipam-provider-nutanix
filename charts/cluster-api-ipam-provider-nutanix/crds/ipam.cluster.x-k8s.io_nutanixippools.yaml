@@ -61,6 +61,30 @@ spec:
                 prismCentral:
                   description: PrismCentral is the configuration details of the Prism Central instance to use for IPAM.
                   properties:
+                    additionalTrustBundle:
+                      description: |-
+                        AdditionalTrustBundle is a PEM encoded x509 cert for the RootCA that was used to create the certificate
+                        for a Prism Central that uses certificates that were issued by a non-publicly trusted RootCA. The trust
+                        bundle is added to the cert pool used to authenticate the TLS connection to the Prism Central.
+                      oneOf:
+                        - required:
+                            - trustBundleConfigMapRef
+                        - required:
+                            - trustBundleData
+                      properties:
+                        trustBundleConfigMapRef:
+                          description: ConfigMapReference to the configmap holding the trust bundle data.
+                          properties:
+                            name:
+                              description: Name is the name of the referenced configmap.
+                              type: string
+                          required:
+                            - name
+                          type: object
+                        trustBundleData:
+                          description: Data of the trust bundle.
+                          type: string
+                      type: object
                     address:
                       description: |-
                         Address is the address of the Prism Central instance to use for IPAM.
@@ -77,11 +101,15 @@ spec:
                         the specified Prism Central.
                       properties:
                         name:
-                          description: Name is the name of the secret.
+                          description: Name is the name of the referenced secret.
                           type: string
                       required:
                         - name
                       type: object
+                    insecure:
+                      default: false
+                      description: use insecure connection to Prism endpoint
+                      type: boolean
                     port:
                       default: 9440
                       description: Port is the port of the Prism Central instance to use for IPAM.

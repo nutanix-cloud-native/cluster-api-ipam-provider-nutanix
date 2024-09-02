@@ -4,14 +4,20 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/informers"
+	coreinformers "k8s.io/client-go/informers/core/v1"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	clientgocache "k8s.io/client-go/tools/cache"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/logs"
 	logsv1 "k8s.io/component-base/logs/api/v1"
@@ -122,11 +128,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	secretInformer, configMapInformer, err := createInformers(signalCtx, mgr)
+	if err != nil {
+		setupLog.Error(err, "unable to create informers")
+		os.Exit(1)
+	}
+
 	if err = (&ipamutil.ClaimReconciler{
 		Client:           mgr.GetClient(),
 		Scheme:           mgr.GetScheme(),
 		WatchFilterValue: watchFilter,
-		Adapter:          controllers.NewNutanixProviderAdapter(mgr.GetClient(), watchFilter),
+		Adapter: controllers.NewNutanixProviderAdapter(
+			mgr.GetClient(),
+			watchFilter,
+			secretInformer,
+			configMapInformer,
+		),
 	}).SetupWithManager(signalCtx, mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "IPAddressClaim")
 		os.Exit(1)
@@ -151,4 +168,28 @@ func newManager(opts *manager.Options) (ctrl.Manager, error) {
 	}
 
 	return mgr, nil
+}
+
+func createInformers(
+	ctx context.Context,
+	mgr manager.Manager,
+) (coreinformers.SecretInformer, coreinformers.ConfigMapInformer, error) {
+	// Create a secret informer for the Nutanix client.
+	clientset, err := kubernetes.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to create clientset for management cluster: %w", err)
+	}
+
+	informerFactory := informers.NewSharedInformerFactory(clientset, time.Minute)
+	secretInformer := informerFactory.Core().V1().Secrets()
+	informer := secretInformer.Informer()
+	go informer.Run(ctx.Done())
+	clientgocache.WaitForCacheSync(ctx.Done(), informer.HasSynced)
+
+	configMapInformer := informerFactory.Core().V1().ConfigMaps()
+	cmInformer := configMapInformer.Informer()
+	go cmInformer.Run(ctx.Done())
+	clientgocache.WaitForCacheSync(ctx.Done(), cmInformer.HasSynced)
+
+	return secretInformer, configMapInformer, nil
 }

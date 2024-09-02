@@ -62,7 +62,7 @@ linters-settings:
       - Standard
       - Default
       - Prefix(github.com/nutanix-cloud-native)
-      - Prefix(github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix)
+      - localmodule
   gocritic:
     enabled-tags:
       - diagnostic

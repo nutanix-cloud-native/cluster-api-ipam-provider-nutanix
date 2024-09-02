@@ -51,10 +51,38 @@ type PrismCentral struct {
 	// the specified Prism Central.
 	// +kubebuilder:validation:Required
 	CredentialsSecretRef LocalSecretRef `json:"credentialsSecretRef"`
+
+	// use insecure connection to Prism endpoint
+	// +kubebuilder:default=false
+	// +kubebuilder:validation:Optional
+	Insecure bool `json:"insecure,omitempty"`
+
+	// AdditionalTrustBundle is a PEM encoded x509 cert for the RootCA that was used to create the certificate
+	// for a Prism Central that uses certificates that were issued by a non-publicly trusted RootCA. The trust
+	// bundle is added to the cert pool used to authenticate the TLS connection to the Prism Central.
+	// +kubebuilder:validation:Optional
+	AdditionalTrustBundle *AdditionalTrustBundle `json:"additionalTrustBundle,omitempty"`
+}
+
+// AdditionalTrustBundle is a reference to a Nutanix trust bundle.
+type AdditionalTrustBundle struct {
+	// Data of the trust bundle.
+	// +kubebuilder:validation:Optional
+	Data *string `json:"trustBundleData,omitempty"`
+
+	// ConfigMapReference to the configmap holding the trust bundle data.
+	// +kubebuilder:validation:Optional
+	ConfigMapReference *LocalConfigMapRef `json:"trustBundleConfigMapRef,omitempty"`
+}
+
+type LocalConfigMapRef struct {
+	// Name is the name of the referenced configmap.
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
 }
 
 type LocalSecretRef struct {
-	// Name is the name of the secret.
+	// Name is the name of the referenced secret.
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 }

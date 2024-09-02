@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strconv"
 
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
@@ -15,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/cluster-api-ipam-provider-in-cluster/pkg/ipamutil"
 	ipampredicates "sigs.k8s.io/cluster-api-ipam-provider-in-cluster/pkg/predicates"
@@ -28,11 +28,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	prismgoclient "github.com/nutanix-cloud-native/prism-go-client"
-	"github.com/nutanix-cloud-native/prism-go-client/adapter"
 	"github.com/nutanix-cloud-native/prism-go-client/environment/credentials"
 
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha1"
+	pcclient "github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/index"
 )
 
@@ -45,7 +44,9 @@ type genericNutanixIPPool interface {
 type NutanixProviderAdapter struct {
 	k8sClient        ctrlclient.Client
 	watchFilterValue string
-	pcClientGetter   func(adapter.CachedClientParams) (adapter.Client, error)
+	pcClientGetter   func(pcclient.CachedClientParams) (pcclient.Client, error)
+	secretInformer   coreinformers.SecretInformer
+	cmInformer       coreinformers.ConfigMapInformer
 }
 
 var _ ipamutil.ProviderAdapter = &NutanixProviderAdapter{}
@@ -53,20 +54,26 @@ var _ ipamutil.ProviderAdapter = &NutanixProviderAdapter{}
 func NewNutanixProviderAdapter(
 	client ctrlclient.Client,
 	watchFilter string,
+	secretInformer coreinformers.SecretInformer,
+	cmInformer coreinformers.ConfigMapInformer,
 ) *NutanixProviderAdapter {
 	return &NutanixProviderAdapter{
 		k8sClient:        client,
-		pcClientGetter:   adapter.GetClient,
+		pcClientGetter:   pcclient.GetClient,
 		watchFilterValue: watchFilter,
+		secretInformer:   secretInformer,
+		cmInformer:       cmInformer,
 	}
 }
 
-// IPAddressClaimHandler reconciles a InClusterIPPool object.
+// IPAddressClaimHandler reconciles a NutanixIPPool object.
 type IPAddressClaimHandler struct {
-	ctrlclient.Client
+	client         ctrlclient.Client
 	claim          *ipamv1.IPAddressClaim
 	pool           genericNutanixIPPool
-	pcClientGetter func(adapter.CachedClientParams) (adapter.Client, error)
+	pcClientGetter func(pcclient.CachedClientParams) (pcclient.Client, error)
+	secretInformer coreinformers.SecretInformer
+	cmInformer     coreinformers.ConfigMapInformer
 }
 
 var _ ipamutil.ClaimHandler = &IPAddressClaimHandler{}
@@ -133,9 +140,11 @@ func (i *NutanixProviderAdapter) ClaimHandlerFor(
 	claim *ipamv1.IPAddressClaim,
 ) ipamutil.ClaimHandler {
 	return &IPAddressClaimHandler{
-		Client:         i.k8sClient,
+		client:         i.k8sClient,
 		claim:          claim,
 		pcClientGetter: i.pcClientGetter,
+		secretInformer: i.secretInformer,
+		cmInformer:     i.cmInformer,
 	}
 }
 
@@ -147,7 +156,7 @@ func (i *NutanixProviderAdapter) ClaimHandlerFor(
 // +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddressclaims/status;ipaddresses/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddressclaims/status;ipaddresses/finalizers,verbs=update
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;list;watch
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets;configmaps,verbs=get;list;watch
 
 // FetchPool fetches the NutanixIPPool.
 func (h *IPAddressClaimHandler) FetchPool(
@@ -155,7 +164,7 @@ func (h *IPAddressClaimHandler) FetchPool(
 ) (ctrlclient.Object, *ctrl.Result, error) {
 	if h.claim.Spec.PoolRef.Kind == v1alpha1.NutanixIPPoolKind {
 		h.pool = &v1alpha1.NutanixIPPool{}
-		if err := h.Client.Get(
+		if err := h.client.Get(
 			ctx, types.NamespacedName{Namespace: h.claim.Namespace, Name: h.claim.Spec.PoolRef.Name}, h.pool,
 		); err != nil {
 			return nil, nil, errors.Wrap(err, "failed to fetch pool")
@@ -170,13 +179,13 @@ func (h *IPAddressClaimHandler) EnsureAddress(
 	ctx context.Context,
 	address *ipamv1.IPAddress,
 ) (*ctrl.Result, error) {
-	nutanixClient, err := h.getClient(ctx)
+	nutanixClient, err := h.getClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Nutanix client: %w", err)
 	}
 
 	// Check if the address already exists.
-	err = h.Client.Get(ctx, ctrlclient.ObjectKeyFromObject(address), address)
+	err = h.client.Get(ctx, ctrlclient.ObjectKeyFromObject(address), address)
 	// A nil error means the address already exists so nothing to do.
 	if err == nil {
 		return nil, nil
@@ -190,7 +199,7 @@ func (h *IPAddressClaimHandler) EnsureAddress(
 	reservedIP, err := nutanixClient.Networking().ReserveIP(
 		ctx,
 		h.pool.PoolSpec().Subnet,
-		adapter.ReserveIPOpts{Cluster: ptr.Deref(h.pool.PoolSpec().Cluster, "")},
+		pcclient.ReserveIPOpts{Cluster: ptr.Deref(h.pool.PoolSpec().Cluster, "")},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reserve IP: %w", err)
@@ -208,7 +217,7 @@ func (h *IPAddressClaimHandler) ReleaseAddress(ctx context.Context) (*ctrl.Resul
 	}
 
 	var address ipamv1.IPAddress
-	if err := h.Client.Get(
+	if err := h.client.Get(
 		ctx,
 		ctrlclient.ObjectKey{Namespace: h.pool.GetNamespace(), Name: h.claim.Status.AddressRef.Name},
 		&address,
@@ -220,7 +229,7 @@ func (h *IPAddressClaimHandler) ReleaseAddress(ctx context.Context) (*ctrl.Resul
 		return nil, fmt.Errorf("failed to get IPAddress: %w", err)
 	}
 
-	nutanixClient, err := h.getClient(ctx)
+	nutanixClient, err := h.getClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Nutanix client: %w", err)
 	}
@@ -229,7 +238,7 @@ func (h *IPAddressClaimHandler) ReleaseAddress(ctx context.Context) (*ctrl.Resul
 		ctx,
 		net.ParseIP(address.Spec.Address),
 		h.pool.PoolSpec().Subnet,
-		adapter.UnreserveIPOpts{Cluster: ptr.Deref(h.pool.PoolSpec().Cluster, "")},
+		pcclient.UnreserveIPOpts{Cluster: ptr.Deref(h.pool.PoolSpec().Cluster, "")},
 	); err != nil {
 		return nil, fmt.Errorf("failed to unreserve IP: %w", err)
 	}
@@ -254,49 +263,46 @@ func resourceUnpaused() predicate.Predicate {
 	}
 }
 
-func (h *IPAddressClaimHandler) getClient(ctx context.Context) (adapter.Client, error) {
+func (h *IPAddressClaimHandler) getClient() (pcclient.Client, error) {
 	pc := h.pool.PoolSpec().PrismCentral
-	var (
-		credentialSecret    corev1.Secret
-		credentialSecretKey = ctrlclient.ObjectKey{
-			Namespace: h.pool.GetNamespace(),
-			Name:      pc.CredentialsSecretRef.Name,
+
+	var additionalTrustBundle *credentials.NutanixTrustBundleReference
+	if pc.AdditionalTrustBundle != nil {
+		switch {
+		case pc.AdditionalTrustBundle.Data != nil && *pc.AdditionalTrustBundle.Data != "":
+			additionalTrustBundle = &credentials.NutanixTrustBundleReference{
+				Data: *pc.AdditionalTrustBundle.Data,
+				Kind: credentials.NutanixTrustBundleKindString,
+			}
+		case pc.AdditionalTrustBundle.ConfigMapReference != nil && pc.AdditionalTrustBundle.ConfigMapReference.Name != "":
+			additionalTrustBundle = &credentials.NutanixTrustBundleReference{
+				Name:      pc.AdditionalTrustBundle.ConfigMapReference.Name,
+				Namespace: h.pool.GetNamespace(),
+				Kind:      credentials.NutanixTrustBundleKindConfigMap,
+			}
+		default:
+			return nil, fmt.Errorf(
+				"invalid additional trust bundle configuration: either data or secretRef must be set",
+			)
 		}
+	}
+
+	cacheClientParams, err := newClientCacheParams(
+		credentials.NutanixPrismEndpoint{
+			Address:               pc.Address,
+			Port:                  int32(pc.Port),
+			Insecure:              pc.Insecure,
+			AdditionalTrustBundle: additionalTrustBundle,
+			CredentialRef: &credentials.NutanixCredentialReference{
+				Kind:      credentials.SecretKind,
+				Name:      pc.CredentialsSecretRef.Name,
+				Namespace: h.pool.GetNamespace(),
+			},
+		},
+		h.secretInformer,
+		h.cmInformer,
+		h.pool,
 	)
-	if err := h.Client.Get(ctx,
-		credentialSecretKey,
-		&credentialSecret,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"failed to fetch credentials secret %v: %w",
-			credentialSecretKey,
-			err,
-		)
-	}
-
-	// Parse credentials in secret
-	credentialData, ok := credentialSecret.Data[credentials.KeyName]
-	if !ok {
-		return nil, fmt.Errorf(
-			"no %q data found in secret %v",
-			credentials.KeyName,
-			credentialSecretKey,
-		)
-	}
-
-	apiCredential, err := credentials.ParseCredentials(credentialData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse credentials: %w", err)
-	}
-
-	cacheClientParams, err := newClientCacheParams(h.pool, &prismgoclient.Credentials{
-		Username:    apiCredential.Username,
-		Password:    apiCredential.Password,
-		Endpoint:    pc.Address,
-		Port:        strconv.Itoa(int(pc.Port)),
-		Insecure:    false,
-		SessionAuth: true,
-	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Nutanix cache client params: %w", err)
 	}
