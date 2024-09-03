@@ -10,9 +10,10 @@
     flake-utils.lib.eachDefaultSystem (system:
       with nixpkgs.legacyPackages.${system}; rec {
         packages = rec {
-          golangci-lint = pkgs.golangci-lint.override { buildGoModule = buildGo122Module; };
+          golangci-lint = pkgs.golangci-lint.override { buildGoModule = buildGo123Module; };
+          govulncheck = pkgs.govulncheck.override { buildGoModule = buildGo123Module; };
 
-          go-mod-upgrade = buildGo122Module rec {
+          go-mod-upgrade = buildGo123Module rec {
             name = "go-mod-upgrade";
             version = "0.10.0";
             src = fetchFromGitHub {
@@ -27,18 +28,18 @@
             ldflags = [ "-s" "-w" "-X" "main.version=v${version}" ];
           };
 
-          setup-envtest = buildGo122Module rec {
+          setup-envtest = buildGo123Module rec {
             name = "setup-envtest";
-            version = "0.18.4";
+            version = "0.19.0";
             src = fetchFromGitHub {
               owner = "kubernetes-sigs";
               repo = "controller-runtime";
               rev = "v${version}";
-              hash = "sha256-Yl2pcu09Dyk0Y2v5RtEJwOSyBJ6Avj5d7Bh25bxnkvU=";
+              hash = "sha256-9AqZMiA+OIJD+inmeUc/lq57kV7L85jk1I4ywiSKirg=";
             } + "/tools/setup-envtest";
             doCheck = false;
             subPackages = [ "." ];
-            vendorHash = "sha256-tFWXROKZ+5rrHdiY3dFHAo5g5TKYfc8HgLSouD7bI+s=";
+            vendorHash = "sha256-sn3HiKTpQzjrFTOVOGFJwoNpxU+XWgkWD2EOcPilePY=";
             ldflags = [ "-s" "-w" ];
           };
 
@@ -55,24 +56,24 @@
             dontNpmBuild = true;
           };
 
-          controller-gen = buildGo122Module rec {
+          controller-gen = buildGo123Module rec {
             name = "controller-gen";
-            version = "0.15.0";
+            version = "0.16.2";
             src = fetchFromGitHub {
               owner = "kubernetes-sigs";
               repo = "controller-tools";
               rev = "v${version}";
-              hash = "sha256-TRJW2//UYQMZM19D74O4SA0GnKPAUI2n+dNKIUzqRuw=";
+              hash = "sha256-f12p9d6c3dXOOSnR//bIAs6wB9359GEeN9P1Lfb1/0Y=";
             };
             doCheck = false;
             subPackages = [ "./cmd/controller-gen" ];
-            vendorHash = "sha256-6he/zYznnmhmFU2YPRTnWBTLG2nEOZZu9Iks6orMVMs=";
+            vendorHash = "sha256-3p9K08WMqDRHHa9116//3lFeaMtRaipD4LyisaKWV7I=";
             ldflags = [ "-s" "-w" ];
           };
 
-          clusterctl = buildGo122Module rec {
+          clusterctl = buildGo123Module rec {
             pname = "clusterctl";
-            version = "1.7.3";
+            version = "1.8.1";
 
             src = fetchFromGitHub {
               owner = "kubernetes-sigs";
@@ -90,15 +91,15 @@
             ];
           };
 
-          helm-schema = buildGo122Module rec {
+          helm-schema = buildGo123Module rec {
             pname = "helm-schema";
-            version = "1.4.1";
+            version = "1.5.3";
 
             src = fetchFromGitHub {
               owner = "losisin";
               repo = "helm-values-schema-json";
               rev = "v${version}";
-              hash = "sha256-pi/Xp4t8UFgdFvU2De2Uo/gVsVltan4iSw2XGEtynuw=";
+              hash = "sha256-xKEJrNONB+781L1pdRE0EKV+5t/SAQxiKoOahUdjFS8=";
             };
             doCheck = false;
             vendorHash = "sha256-F2mT36aYkLjUZbV5GQH8mNMZjGi/70dTENU2rRhAJq4=";
