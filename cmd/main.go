@@ -82,14 +82,14 @@ func main() {
 	pflag.CommandLine.StringVar(
 		&mgrOptions.LeaderElectionID,
 		"leader-election-id",
-		mgrOptions.LeaderElectionID,
+		"",
 		"The name of the resource that leader election will use for holding the leader lock.",
 	)
 
 	pflag.CommandLine.StringVar(
 		&mgrOptions.LeaderElectionNamespace,
 		"leader-election-namespace",
-		mgrOptions.LeaderElectionNamespace,
+		"",
 		"The namespace of the resource that leader election will use for holding the leader lock.",
 	)
 
