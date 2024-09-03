@@ -7,14 +7,18 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
+	"github.com/spf13/pflag"
+	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	coreinformers "k8s.io/client-go/informers/core/v1"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/cluster-api-ipam-provider-in-cluster/pkg/ipamutil"
 	ipampredicates "sigs.k8s.io/cluster-api-ipam-provider-in-cluster/pkg/predicates"
@@ -23,6 +27,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -47,15 +52,51 @@ type NutanixProviderAdapter struct {
 	pcClientGetter   func(pcclient.CachedClientParams) (pcclient.Client, error)
 	secretInformer   coreinformers.SecretInformer
 	cmInformer       coreinformers.ConfigMapInformer
+	opts             reconcilerOptions
 }
 
 var _ ipamutil.ProviderAdapter = &NutanixProviderAdapter{}
+
+type reconcilerOptions struct {
+	concurrentReconciles           int
+	minRequeueTime, maxRequeueTime time.Duration
+}
+
+func DefaultReconcilerOptions() reconcilerOptions {
+	return reconcilerOptions{
+		concurrentReconciles: 10,
+		minRequeueTime:       500 * time.Millisecond,
+		maxRequeueTime:       1000 * time.Second,
+	}
+}
+
+func (o *reconcilerOptions) AddFlags(fs *pflag.FlagSet) {
+	fs.IntVar(
+		&o.concurrentReconciles,
+		"concurrent-reconciles",
+		o.concurrentReconciles,
+		"Number of reconciles to run concurrently",
+	)
+	fs.DurationVar(
+		&o.minRequeueTime,
+		"min-requeue-delay",
+		o.minRequeueTime,
+		"Minimum time to wait when requeueing on error",
+	)
+	fs.DurationVar(
+		&o.maxRequeueTime,
+		"max-requeue-delay",
+		o.maxRequeueTime,
+		"Maximum time to wait when requeueing on error",
+	)
+}
 
 func NewNutanixProviderAdapter(
 	client ctrlclient.Client,
 	watchFilter string,
 	secretInformer coreinformers.SecretInformer,
 	cmInformer coreinformers.ConfigMapInformer,
+	opts reconcilerOptions,
 ) *NutanixProviderAdapter {
 	return &NutanixProviderAdapter{
 		k8sClient:        client,
@@ -63,6 +104,7 @@ func NewNutanixProviderAdapter(
 		watchFilterValue: watchFilter,
 		secretInformer:   secretInformer,
 		cmInformer:       cmInformer,
+		opts:             opts,
 	}
 }
 
@@ -99,7 +141,20 @@ func (i *NutanixProviderAdapter) SetupWithManager(_ context.Context, b *ctrl.Bui
 				Group: v1alpha1.GroupVersion.Group,
 				Kind:  v1alpha1.NutanixIPPoolKind,
 			}),
-		))
+		)).
+		WithOptions(
+			controller.Options{
+				MaxConcurrentReconciles: i.opts.concurrentReconciles,
+				RateLimiter: workqueue.NewMaxOfRateLimiter(
+					workqueue.NewItemExponentialFailureRateLimiter(
+						i.opts.minRequeueTime,
+						i.opts.maxRequeueTime,
+					),
+					// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
+					&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+				),
+			},
+		)
 	return nil
 }
 

@@ -1,6 +1,8 @@
 // Copyright 2024 Nutanix. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+// +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 package main
 
 import (
@@ -53,7 +55,7 @@ func main() {
 			BindAddress: ":8080",
 		},
 		HealthProbeBindAddress: ":8081",
-		LeaderElection:         false,
+		LeaderElection:         true,
 	}
 
 	pflag.CommandLine.StringVar(
@@ -73,6 +75,24 @@ func main() {
 	pflag.CommandLine.StringVar(&mgrOptions.PprofBindAddress, "profiler-address", "",
 		"Bind address to expose the pprof profiler (e.g. localhost:6060)")
 
+	pflag.CommandLine.BoolVar(&mgrOptions.LeaderElection, "leader-elect", mgrOptions.LeaderElection,
+		"Enable leader election for controller manager. "+
+			"Enabling this will ensure there is only one active controller manager.")
+
+	pflag.CommandLine.StringVar(
+		&mgrOptions.LeaderElectionID,
+		"leader-election-id",
+		mgrOptions.LeaderElectionID,
+		"The name of the resource that leader election will use for holding the leader lock.",
+	)
+
+	pflag.CommandLine.StringVar(
+		&mgrOptions.LeaderElectionNamespace,
+		"leader-election-namespace",
+		mgrOptions.LeaderElectionNamespace,
+		"The namespace of the resource that leader election will use for holding the leader lock.",
+	)
+
 	logOptions := logs.NewOptions()
 
 	// Initialize and parse command line flags.
@@ -89,6 +109,9 @@ func main() {
 	)
 	pflag.CommandLine.StringVar(&watchFilter, "watch-filter", "", "")
 
+	reconcilerOpts := controllers.DefaultReconcilerOptions()
+	reconcilerOpts.AddFlags(pflag.CommandLine)
+
 	logs.AddFlags(pflag.CommandLine, logs.SkipLoggingConfigurationFlags())
 	logsv1.AddFlags(logOptions, pflag.CommandLine)
 	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
@@ -96,6 +119,11 @@ func main() {
 	pflag.Parse()
 
 	verflag.PrintAndExitIfRequested()
+
+	if mgrOptions.LeaderElection && mgrOptions.LeaderElectionID == "" {
+		setupLog.Error(nil, "leader-election-id must be specified when leader-election is enabled")
+		os.Exit(1)
+	}
 
 	if watchNamespace != "" {
 		setupLog.Info("Watching cluster-api objects only in namespace", "namespace", watchNamespace)
@@ -143,6 +171,7 @@ func main() {
 			watchFilter,
 			secretInformer,
 			configMapInformer,
+			reconcilerOpts,
 		),
 	}).SetupWithManager(signalCtx, mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "IPAddressClaim")

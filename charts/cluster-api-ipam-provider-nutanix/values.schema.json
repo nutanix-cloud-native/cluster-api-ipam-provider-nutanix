@@ -30,6 +30,29 @@
         "imagePullSecrets": {
             "type": "array"
         },
+        "leaderElection": {
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "leaseID": {
+                    "type": "string"
+                },
+                "leaseNamespace": {
+                    "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "maxConcurrentReconciles": {
+            "type": "integer"
+        },
+        "maxRequeueDelay": {
+            "type": "string"
+        },
+        "minRequeueDelay": {
+            "type": "string"
+        },
         "nodeSelector": {
             "properties": {},
             "type": "object"
