@@ -28,7 +28,7 @@ spec:
         image: "{{ .Values.image.repository }}:{{ default $.Chart.AppVersion .Values.image.tag }}"
         imagePullPolicy: "{{ .Values.image.pullPolicy }}"
         args:
-        - --concurrent-reconciles={{ .Values.maxConcurrentReconciles }}
+        - --max-concurrent-reconciles={{ .Values.maxConcurrentReconciles }}
         - --min-requeue-delay={{ .Values.minRequeueDelay }}
         - --max-requeue-delay={{ .Values.maxRequeueDelay }}
         - --leader-elect={{ .Values.leaderElection.enabled }}

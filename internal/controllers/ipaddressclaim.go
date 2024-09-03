@@ -58,23 +58,23 @@ type NutanixProviderAdapter struct {
 var _ ipamutil.ProviderAdapter = &NutanixProviderAdapter{}
 
 type reconcilerOptions struct {
-	concurrentReconciles           int
+	maxConcurrentReconciles        int
 	minRequeueTime, maxRequeueTime time.Duration
 }
 
 func DefaultReconcilerOptions() reconcilerOptions {
 	return reconcilerOptions{
-		concurrentReconciles: 10,
-		minRequeueTime:       500 * time.Millisecond,
-		maxRequeueTime:       1000 * time.Second,
+		maxConcurrentReconciles: 10,
+		minRequeueTime:          500 * time.Millisecond,
+		maxRequeueTime:          1000 * time.Second,
 	}
 }
 
 func (o *reconcilerOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.IntVar(
-		&o.concurrentReconciles,
-		"concurrent-reconciles",
-		o.concurrentReconciles,
+		&o.maxConcurrentReconciles,
+		"max-concurrent-reconciles",
+		o.maxConcurrentReconciles,
 		"Number of reconciles to run concurrently",
 	)
 	fs.DurationVar(
@@ -144,7 +144,7 @@ func (i *NutanixProviderAdapter) SetupWithManager(_ context.Context, b *ctrl.Bui
 		)).
 		WithOptions(
 			controller.Options{
-				MaxConcurrentReconciles: i.opts.concurrentReconciles,
+				MaxConcurrentReconciles: i.opts.maxConcurrentReconciles,
 				RateLimiter: workqueue.NewMaxOfRateLimiter(
 					workqueue.NewItemExponentialFailureRateLimiter(
 						i.opts.minRequeueTime,
