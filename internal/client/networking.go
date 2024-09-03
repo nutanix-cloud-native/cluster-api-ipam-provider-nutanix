@@ -14,6 +14,7 @@ import (
 	networkingcommonapi "github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4/models/common/v1/config"
 	networkingapi "github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4/models/networking/v4/config"
 	networkingprismapi "github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4/models/prism/v4/config"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/nutanix-cloud-native/prism-go-client/utils"
 )
@@ -45,15 +46,12 @@ func (n *networkingClient) ReserveIP(
 	subnet string,
 	opts ReserveIPOpts,
 ) (ip net.IP, err error) {
-	subnetUUID, err := uuid.Parse(subnet)
+	apiSubnet, err := n.GetSubnet(subnet, GetSubnetOpts{Cluster: opts.Cluster})
 	if err != nil {
-		apiSubnet, err := n.GetSubnet(subnet, GetSubnetOpts{Cluster: opts.Cluster})
-		if err != nil {
-			return nil, fmt.Errorf("failed to get subnet %s: %w", subnet, err)
-		}
-
-		subnetUUID = apiSubnet.ExtID()
+		return nil, fmt.Errorf("failed to get subnet %s: %w", subnet, err)
 	}
+
+	subnetUUID := apiSubnet.ExtID()
 
 	reserveType := networkingapi.RESERVETYPE_IP_ADDRESS_COUNT
 	reserveIPResponse, err := n.v4Client.SubnetIPReservationApi.ReserveIpsBySubnetId(
@@ -143,15 +141,12 @@ func (n *networkingClient) UnreserveIP(
 	subnet string,
 	opts UnreserveIPOpts,
 ) error {
-	subnetUUID, err := uuid.Parse(subnet)
+	apiSubnet, err := n.GetSubnet(subnet, GetSubnetOpts{Cluster: opts.Cluster})
 	if err != nil {
-		apiSubnet, err := n.GetSubnet(subnet, GetSubnetOpts{Cluster: opts.Cluster})
-		if err != nil {
-			return fmt.Errorf("failed to get subnet %s: %w", subnet, err)
-		}
-
-		subnetUUID = apiSubnet.ExtID()
+		return fmt.Errorf("failed to get subnet %s: %w", subnet, err)
 	}
+
+	subnetUUID := apiSubnet.ExtID()
 
 	ipAddress := networkingcommonapi.NewIPAddress()
 	if ip.To4() != nil {
@@ -204,13 +199,29 @@ func (s *Subnet) ExtID() uuid.UUID {
 	return s.extID
 }
 
-func (n *networkingClient) GetSubnet(subnet string, opts GetSubnetOpts) (*Subnet, error) {
-	subnetUUID, err := uuid.Parse(subnet)
+func (n *networkingClient) GetSubnet(
+	subnetExtIDOrName string,
+	opts GetSubnetOpts,
+) (*Subnet, error) {
+	var errs []error
+
+	subnetUUID, err := uuid.Parse(subnetExtIDOrName)
 	if err == nil {
-		return n.getSubnetByExtID(subnetUUID)
+		subnet, errByExtID := n.getSubnetByExtID(subnetUUID)
+		if errByExtID == nil {
+			return subnet, nil
+		}
+		errs = append(errs, errByExtID)
 	}
 
-	return n.getSubnetByName(subnet, opts)
+	subnet, errByName := n.getSubnetByName(subnetExtIDOrName, opts)
+	if errByName != nil {
+		errs = append(errs, errByName)
+		aggErr := kerrors.NewAggregate(errs)
+		return nil, fmt.Errorf("failed to get subnet %q: %w", subnetExtIDOrName, aggErr)
+	}
+
+	return subnet, nil
 }
 
 func (n *networkingClient) getSubnetByName(subnetName string, opts GetSubnetOpts) (*Subnet, error) {
