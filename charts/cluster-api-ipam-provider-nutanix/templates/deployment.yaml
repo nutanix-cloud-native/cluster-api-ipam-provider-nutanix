@@ -28,6 +28,12 @@ spec:
         image: "{{ .Values.image.repository }}:{{ default $.Chart.AppVersion .Values.image.tag }}"
         imagePullPolicy: "{{ .Values.image.pullPolicy }}"
         args:
+        - --max-concurrent-reconciles={{ .Values.maxConcurrentReconciles }}
+        - --min-requeue-delay={{ .Values.minRequeueDelay }}
+        - --max-requeue-delay={{ .Values.maxRequeueDelay }}
+        - --leader-elect={{ .Values.leaderElection.enabled }}
+        - --leader-election-namespace={{ default .Release.Namespace .Values.leaderElection.leaseNamespace }}
+        - --leader-election-id={{ default .Release.Name .Values.leaderElection.leaseID }}
         {{- range $key, $value := .Values.extraArgs }}
         - --{{ $key }}={{ $value }}
         {{- end }}

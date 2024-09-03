@@ -31,6 +31,12 @@ A Helm chart for cluster-api-ipam-provider-nutanix
 | image.repository | string | `"ghcr.io/nutanix-cloud-native/cluster-api-ipam-provider-nutanix"` |  |
 | image.tag | string | `""` |  |
 | imagePullSecrets | list | `[]` | Optional secrets used for pulling the container image |
+| leaderElection.enabled | bool | `true` |  |
+| leaderElection.leaseID | string | `""` |  |
+| leaderElection.leaseNamespace | string | `""` |  |
+| maxConcurrentReconciles | int | `10` |  |
+| maxRequeueDelay | string | `"10s"` |  |
+| minRequeueDelay | string | `"500ms"` |  |
 | nodeSelector | object | `{}` |  |
 | priorityClassName | string | `"system-cluster-critical"` | Priority class to be used for the pod. |
 | resources.limits.cpu | string | `"100m"` |  |

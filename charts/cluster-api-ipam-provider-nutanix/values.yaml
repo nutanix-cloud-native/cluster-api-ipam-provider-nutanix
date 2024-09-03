@@ -9,6 +9,10 @@ image:
   tag: ""
   pullPolicy: IfNotPresent
 
+maxConcurrentReconciles: 10
+minRequeueDelay: 500ms
+maxRequeueDelay: 10s
+
 # -- Optional secrets used for pulling the container image
 imagePullSecrets: []
 # - name: Secret with Registry credentials
@@ -43,3 +47,8 @@ tolerations:
 
 # -- Priority class to be used for the pod.
 priorityClassName: system-cluster-critical
+
+leaderElection:
+  enabled: true
+  leaseNamespace: ""
+  leaseID: ""
