@@ -16,7 +16,8 @@ import (
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha1"
 )
 
-var _ = DescribeTableSubtree("validation",
+var _ = DescribeTableSubtree(
+	"validation",
 	func(inputSpec v1alpha1.NutanixIPPoolSpec, wantErr bool) {
 		var obj client.Object
 		AfterEach(func() {
@@ -85,7 +86,7 @@ var _ = DescribeTableSubtree("validation",
 		Subnet: uuid.NewString(),
 	}, true),
 
-	Entry("success with cluster and named subnet ", v1alpha1.NutanixIPPoolSpec{
+	Entry("success with cluster and named subnet", v1alpha1.NutanixIPPoolSpec{
 		PrismCentral: v1alpha1.PrismCentral{
 			Address: "127.0.0.1",
 			Port:    9440,
@@ -97,7 +98,7 @@ var _ = DescribeTableSubtree("validation",
 		Cluster: ptr.To("example-cluster-name"),
 	}, false),
 
-	Entry("failure with missing cluster and named subnet ", v1alpha1.NutanixIPPoolSpec{
+	Entry("failure with missing cluster and named subnet", v1alpha1.NutanixIPPoolSpec{
 		PrismCentral: v1alpha1.PrismCentral{
 			Address: "127.0.0.1",
 			Port:    9440,
@@ -107,4 +108,71 @@ var _ = DescribeTableSubtree("validation",
 		},
 		Subnet: "example-subnet-name",
 	}, true),
+
+	Entry("failure with both additionalTrustBundle data and ref set", v1alpha1.NutanixIPPoolSpec{
+		PrismCentral: v1alpha1.PrismCentral{
+			Address: "127.0.0.1",
+			Port:    9440,
+			CredentialsSecretRef: v1alpha1.LocalSecretRef{
+				Name: "test-secret",
+			},
+			AdditionalTrustBundle: &v1alpha1.AdditionalTrustBundle{
+				Data: []byte("example-trust-bundle-data"),
+				ConfigMapReference: &v1alpha1.LocalConfigMapRef{
+					Name: "example-config-map-name",
+				},
+			},
+		},
+		Subnet:  "example-subnet-name",
+		Cluster: ptr.To("example-cluster-name"),
+	}, true),
+
+	Entry("success with only data additionalTrustBundle set", v1alpha1.NutanixIPPoolSpec{
+		PrismCentral: v1alpha1.PrismCentral{
+			Address: "127.0.0.1",
+			Port:    9440,
+			CredentialsSecretRef: v1alpha1.LocalSecretRef{
+				Name: "test-secret",
+			},
+			AdditionalTrustBundle: &v1alpha1.AdditionalTrustBundle{
+				Data: []byte("example-trust-bundle-data"),
+			},
+		},
+		Subnet:  "example-subnet-name",
+		Cluster: ptr.To("example-cluster-name"),
+	}, false),
+
+	Entry("success with only configmap ref additionalTrustBundle set", v1alpha1.NutanixIPPoolSpec{
+		PrismCentral: v1alpha1.PrismCentral{
+			Address: "127.0.0.1",
+			Port:    9440,
+			CredentialsSecretRef: v1alpha1.LocalSecretRef{
+				Name: "test-secret",
+			},
+			AdditionalTrustBundle: &v1alpha1.AdditionalTrustBundle{
+				ConfigMapReference: &v1alpha1.LocalConfigMapRef{
+					Name: "example-config-map-name",
+				},
+			},
+		},
+		Subnet:  "example-subnet-name",
+		Cluster: ptr.To("example-cluster-name"),
+	}, false),
+
+	Entry(
+		"failure with no configmap ref or data additionalTrustBundle set",
+		v1alpha1.NutanixIPPoolSpec{
+			PrismCentral: v1alpha1.PrismCentral{
+				Address: "127.0.0.1",
+				Port:    9440,
+				CredentialsSecretRef: v1alpha1.LocalSecretRef{
+					Name: "test-secret",
+				},
+				AdditionalTrustBundle: &v1alpha1.AdditionalTrustBundle{},
+			},
+			Subnet:  "example-subnet-name",
+			Cluster: ptr.To("example-cluster-name"),
+		},
+		true,
+	),
 )

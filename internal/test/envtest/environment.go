@@ -67,8 +67,9 @@ func Run(ctx context.Context, input RunInput) int {
 	// Bootstrapping test environment
 	env := newEnvironment(input.ManagerUncachedObjs...)
 
+	reconcilersCtx, reconcilersCancel := context.WithCancel(ctx)
 	if input.SetupReconcilers != nil {
-		input.SetupReconcilers(ctx, env.Manager)
+		input.SetupReconcilers(reconcilersCtx, env.Manager)
 	}
 
 	// Start the environment.
@@ -89,6 +90,8 @@ func Run(ctx context.Context, input RunInput) int {
 
 	// Run tests
 	code := input.M.Run()
+
+	reconcilersCancel()
 
 	if skipStop := os.Getenv("TEST_ENV_SKIP_STOP"); skipStop != "" {
 		klog.Info("Skipping test env stop as TEST_ENV_SKIP_STOP is set")

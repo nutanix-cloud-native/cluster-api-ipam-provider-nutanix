@@ -5,39 +5,45 @@ package controllers
 
 import (
 	"fmt"
-	"net"
-	"net/url"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	coreinformers "k8s.io/client-go/informers/core/v1"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	prismgoclient "github.com/nutanix-cloud-native/prism-go-client"
-	"github.com/nutanix-cloud-native/prism-go-client/adapter"
+	"github.com/nutanix-cloud-native/prism-go-client/environment"
+	"github.com/nutanix-cloud-native/prism-go-client/environment/credentials"
+	"github.com/nutanix-cloud-native/prism-go-client/environment/providers/kubernetes"
 	"github.com/nutanix-cloud-native/prism-go-client/environment/types"
+
+	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
 )
 
 type clientCacheParams struct {
-	key                string
 	managementEndpoint types.ManagementEndpoint
+	key                string
 }
 
+var _ client.CachedClientParams = &clientCacheParams{}
+
 func newClientCacheParams(
-	pool genericNutanixIPPool, credentials *prismgoclient.Credentials,
-) (adapter.CachedClientParams, error) {
-	mgmtURL, err := url.Parse("https://" + net.JoinHostPort(credentials.Endpoint, credentials.Port))
+	prismEndpoint credentials.NutanixPrismEndpoint,
+	secretInformer coreinformers.SecretInformer,
+	cmInformer coreinformers.ConfigMapInformer,
+	pool genericNutanixIPPool,
+) (client.CachedClientParams, error) {
+	env := environment.NewEnvironment(kubernetes.NewProvider(
+		prismEndpoint,
+		secretInformer,
+		cmInformer,
+	))
+
+	me, err := env.GetManagementEndpoint(nil)
 	if err != nil {
-		return nil, fmt.Errorf("invalid PC endpoint: %w", err)
+		return nil, fmt.Errorf("failed to get management endpoint: %w", err)
 	}
 
 	return &clientCacheParams{
-		key: client.ObjectKeyFromObject(pool).String(),
-		managementEndpoint: types.ManagementEndpoint{
-			Address: mgmtURL,
-			ApiCredentials: types.ApiCredentials{
-				Username: credentials.Username,
-				Password: credentials.Password,
-			},
-			Insecure: credentials.Insecure,
-		},
+		key:                ctrlclient.ObjectKeyFromObject(pool).String(),
+		managementEndpoint: *me,
 	}, nil
 }
 

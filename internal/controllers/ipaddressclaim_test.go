@@ -1,12 +1,13 @@
 // Copyright 2024 Nutanix. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-//go:generate mockgen -copyright_file ../../hack/license-header.txt -typed -destination ./mock_adapter/mock_client.go github.com/nutanix-cloud-native/prism-go-client/adapter Client,ClusterClient,PrismClient,NetworkingClient
+//go:generate mockgen -copyright_file ../../hack/license-header.txt -typed -destination ./mockclient/mock_client.go -package mockclient github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client Client,ClusterClient,PrismClient,NetworkingClient
 
 package controllers
 
 import (
 	"context"
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/cluster-api-ipam-provider-in-cluster/pkg/ipamutil"
@@ -23,11 +25,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 
-	"github.com/nutanix-cloud-native/prism-go-client/adapter"
 	"github.com/nutanix-cloud-native/prism-go-client/environment/credentials"
 
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha1"
-	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/controllers/mock_adapter"
+	pcclient "github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
+	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/controllers/mockclient"
 )
 
 var ignoreUIDsOnIPAddress = komega.IgnorePaths{
@@ -74,7 +76,7 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 		})
 		DeferCleanup(mockController.Finish)
 
-		mockPCClient = mock_adapter.NewMockClient(mockController)
+		mockPCClient = mockclient.NewMockClient(mockController)
 	})
 
 	Context("When a new IPAddressClaim is created", func() {
@@ -148,12 +150,12 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 			})
 
 			It("should allocate an Address from the Pool", func() {
-				mockPCClient.EXPECT().Networking().DoAndReturn(func() adapter.NetworkingClient {
-					mockNC := mock_adapter.NewMockNetworkingClient(mockController)
+				mockPCClient.EXPECT().Networking().DoAndReturn(func() pcclient.NetworkingClient {
+					mockNC := mockclient.NewMockNetworkingClient(mockController)
 					mockNC.EXPECT().ReserveIP(
 						gomock.Any(),
 						pool.Spec.Subnet,
-						adapter.ReserveIPOpts{Cluster: ""},
+						pcclient.ReserveIPOpts{Cluster: ""},
 					).Return(
 						net.ParseIP("127.0.0.1"), nil,
 					).Times(1)
@@ -161,13 +163,13 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 					return mockNC
 				}).Times(1)
 
-				mockPCClient.EXPECT().Networking().DoAndReturn(func() adapter.NetworkingClient {
-					mockNC := mock_adapter.NewMockNetworkingClient(mockController)
+				mockPCClient.EXPECT().Networking().DoAndReturn(func() pcclient.NetworkingClient {
+					mockNC := mockclient.NewMockNetworkingClient(mockController)
 					mockNC.EXPECT().UnreserveIP(
 						gomock.Any(),
 						net.ParseIP("127.0.0.1"),
 						pool.Spec.Subnet,
-						adapter.UnreserveIPOpts{Cluster: ""},
+						pcclient.UnreserveIPOpts{Cluster: ""},
 					).Return(nil).Times(1)
 
 					return mockNC
@@ -224,6 +226,135 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 
 				Expect(env.CleanupAndWait(context.Background(), &claim)).To(Succeed())
 			})
+
+			It(
+				"should retry on errors to and recover to allocate an Address from the Pool",
+				func() {
+					mockPCClient.EXPECT().
+						Networking().
+						DoAndReturn(func() pcclient.NetworkingClient {
+							mockNC := mockclient.NewMockNetworkingClient(mockController)
+							mockNC.EXPECT().ReserveIP(
+								gomock.Any(),
+								pool.Spec.Subnet,
+								pcclient.ReserveIPOpts{Cluster: ""},
+							).Return(
+								nil, errors.New("task failed"),
+							).Times(1)
+							return mockNC
+						}).
+						Times(3)
+
+					mockPCClient.EXPECT().
+						Networking().
+						DoAndReturn(func() pcclient.NetworkingClient {
+							mockNC := mockclient.NewMockNetworkingClient(mockController)
+							mockNC.EXPECT().ReserveIP(
+								gomock.Any(),
+								pool.Spec.Subnet,
+								pcclient.ReserveIPOpts{Cluster: ""},
+							).Return(
+								net.ParseIP("127.0.0.1"), nil,
+							).Times(1)
+							return mockNC
+						}).
+						Times(1)
+
+					mockPCClient.EXPECT().
+						Networking().
+						DoAndReturn(func() pcclient.NetworkingClient {
+							mockNC := mockclient.NewMockNetworkingClient(mockController)
+							mockNC.EXPECT().UnreserveIP(
+								gomock.Any(),
+								net.ParseIP("127.0.0.1"),
+								pool.Spec.Subnet,
+								pcclient.UnreserveIPOpts{Cluster: ""},
+							).Return(
+								errors.New("task failed"),
+							).Times(1)
+							return mockNC
+						}).
+						Times(3)
+
+					mockPCClient.EXPECT().
+						Networking().
+						DoAndReturn(func() pcclient.NetworkingClient {
+							mockNC := mockclient.NewMockNetworkingClient(mockController)
+							mockNC.EXPECT().UnreserveIP(
+								gomock.Any(),
+								net.ParseIP("127.0.0.1"),
+								pool.Spec.Subnet,
+								pcclient.UnreserveIPOpts{Cluster: ""},
+							).Return(nil).Times(1)
+							return mockNC
+						}).
+						Times(1)
+
+					claim := newClaim("test", namespace, v1alpha1.NutanixIPPoolKind, poolName)
+					expectedIPAddress := ipamv1.IPAddress{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:       "test",
+							Namespace:  namespace,
+							Finalizers: []string{ipamutil.ProtectAddressFinalizer},
+							OwnerReferences: []metav1.OwnerReference{{
+								APIVersion:         ipamv1.GroupVersion.String(),
+								BlockOwnerDeletion: ptr.To(true),
+								Controller:         ptr.To(true),
+								Kind:               "IPAddressClaim",
+								Name:               "test",
+							}, {
+								APIVersion:         v1alpha1.GroupVersion.String(),
+								BlockOwnerDeletion: ptr.To(true),
+								Controller:         ptr.To(false),
+								Kind:               v1alpha1.NutanixIPPoolKind,
+								Name:               poolName,
+							}},
+						},
+						Spec: ipamv1.IPAddressSpec{
+							ClaimRef: corev1.LocalObjectReference{
+								Name: "test",
+							},
+							PoolRef: corev1.TypedLocalObjectReference{
+								APIGroup: ptr.To(v1alpha1.GroupVersion.Group),
+								Kind:     v1alpha1.NutanixIPPoolKind,
+								Name:     poolName,
+							},
+							Address: "127.0.0.1",
+						},
+					}
+
+					Expect(env.CreateAndWait(context.Background(), &claim)).To(Succeed())
+
+					Eventually(func(g Gomega) *ipamv1.IPAddress {
+						address := ipamv1.IPAddress{}
+						g.Expect(
+							env.Get(
+								context.Background(),
+								client.ObjectKeyFromObject(&claim),
+								&address,
+							),
+						).To(Succeed())
+						return &address
+					}).WithTimeout(time.Second).WithPolling(100 * time.Millisecond).Should(
+						komega.EqualObject(
+							&expectedIPAddress,
+							komega.IgnoreAutogeneratedMetadata,
+							ignoreUIDsOnIPAddress,
+						),
+					)
+
+					Expect(env.CleanupAndWait(context.Background(), &claim)).To(Succeed())
+
+					Expect(
+						env.Get(
+							context.Background(),
+							client.ObjectKeyFromObject(&claim),
+							&ipamv1.IPAddress{},
+						),
+					).
+						To(WithTransform(apierrors.IsNotFound, BeTrue()))
+				},
+			)
 		})
 	})
 })
