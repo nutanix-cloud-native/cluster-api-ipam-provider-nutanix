@@ -83,6 +83,7 @@ spec:
                           type: object
                         trustBundleData:
                           description: Data of the trust bundle.
+                          format: byte
                           type: string
                       type: object
                     address:

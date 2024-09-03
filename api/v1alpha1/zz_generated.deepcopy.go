@@ -16,8 +16,8 @@ func (in *AdditionalTrustBundle) DeepCopyInto(out *AdditionalTrustBundle) {
 	*out = *in
 	if in.Data != nil {
 		in, out := &in.Data, &out.Data
-		*out = new(string)
-		**out = **in
+		*out = make([]byte, len(*in))
+		copy(*out, *in)
 	}
 	if in.ConfigMapReference != nil {
 		in, out := &in.ConfigMapReference, &out.ConfigMapReference

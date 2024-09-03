@@ -68,7 +68,7 @@ type PrismCentral struct {
 type AdditionalTrustBundle struct {
 	// Data of the trust bundle.
 	// +kubebuilder:validation:Optional
-	Data *string `json:"trustBundleData,omitempty"`
+	Data []byte `json:"trustBundleData,omitempty"`
 
 	// ConfigMapReference to the configmap holding the trust bundle data.
 	// +kubebuilder:validation:Optional

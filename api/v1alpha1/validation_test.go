@@ -117,7 +117,7 @@ var _ = DescribeTableSubtree(
 				Name: "test-secret",
 			},
 			AdditionalTrustBundle: &v1alpha1.AdditionalTrustBundle{
-				Data: ptr.To("example-trust-bundle-data"),
+				Data: []byte("example-trust-bundle-data"),
 				ConfigMapReference: &v1alpha1.LocalConfigMapRef{
 					Name: "example-config-map-name",
 				},
@@ -135,7 +135,7 @@ var _ = DescribeTableSubtree(
 				Name: "test-secret",
 			},
 			AdditionalTrustBundle: &v1alpha1.AdditionalTrustBundle{
-				Data: ptr.To("example-trust-bundle-data"),
+				Data: []byte("example-trust-bundle-data"),
 			},
 		},
 		Subnet:  "example-subnet-name",

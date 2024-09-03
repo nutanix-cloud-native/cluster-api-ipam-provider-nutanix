@@ -269,9 +269,9 @@ func (h *IPAddressClaimHandler) getClient() (pcclient.Client, error) {
 	var additionalTrustBundle *credentials.NutanixTrustBundleReference
 	if pc.AdditionalTrustBundle != nil {
 		switch {
-		case pc.AdditionalTrustBundle.Data != nil && *pc.AdditionalTrustBundle.Data != "":
+		case len(pc.AdditionalTrustBundle.Data) > 0:
 			additionalTrustBundle = &credentials.NutanixTrustBundleReference{
-				Data: *pc.AdditionalTrustBundle.Data,
+				Data: string(pc.AdditionalTrustBundle.Data),
 				Kind: credentials.NutanixTrustBundleKindString,
 			}
 		case pc.AdditionalTrustBundle.ConfigMapReference != nil && pc.AdditionalTrustBundle.ConfigMapReference.Name != "":
