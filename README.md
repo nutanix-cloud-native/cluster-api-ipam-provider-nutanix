@@ -3,7 +3,7 @@
  SPDX-License-Identifier: Apache-2.0
  -->
 
-# CAPI IPAM Provider For Nutanix (CAIPAMN)
+# CAPI IPAM Provider For Nutanix (CAIPAMX)
 
 For user docs, please see [https://nutanix-cloud-native.github.io/cluster-api-ipam-provider-nutanix/].
 

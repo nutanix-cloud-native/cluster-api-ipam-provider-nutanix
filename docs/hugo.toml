@@ -1,5 +1,5 @@
 baseURL = "https://nutanix-cloud-native.github.io/cluster-api-ipam-provider-nutanix"
-title = "Cluster API IPAM Provider for Nutanix"
+title = "Cluster API IPAM Provider for Nutanix (CAPIAMX)"
 
 enableRobotsTXT = true
 

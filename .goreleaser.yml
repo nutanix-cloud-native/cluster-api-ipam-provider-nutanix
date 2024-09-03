@@ -38,9 +38,9 @@ before:
       apiVersion: v1
       kind: Namespace
       metadata:
-        name: caipamn-system
+        name: caipamx-system
       $(helm template {{ .ProjectName }} ./charts/{{ .ProjectName }} \
-        --namespace caipamn-system \
+        --namespace caipamx-system \
         --include-crds \
         --set-string image.tag=v{{ trimprefix .Version "v" }}{{ if .IsSnapshot }}-{{ .Runtime.Goarch }} \
         --set-string image.repository=ko.local/{{ .ProjectName }}{{ end }} \
