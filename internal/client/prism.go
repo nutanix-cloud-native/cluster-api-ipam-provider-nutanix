@@ -17,24 +17,16 @@ import (
 	v4 "github.com/nutanix-cloud-native/prism-go-client/v4"
 )
 
+const (
+	defaultTaskPollInterval  = 100 * time.Millisecond
+	defaultTaskTimeout       = 5 * time.Minute
+	defaultTaskPollImmediate = false
+)
+
 type WaitForTaskCompletionOpts struct {
 	PollInterval  time.Duration
 	Timeout       time.Duration
 	PollImmediate bool
-}
-
-func (o WaitForTaskCompletionOpts) PollIntervalOrDefault() time.Duration {
-	if o.PollInterval == 0 {
-		return 100 * time.Millisecond
-	}
-	return o.PollInterval
-}
-
-func (o WaitForTaskCompletionOpts) TimeoutOrDefault() time.Duration {
-	if o.Timeout == 0 {
-		return 5 * time.Minute
-	}
-	return o.Timeout
 }
 
 type PrismClient interface {
@@ -58,14 +50,23 @@ func (p *prismClient) WaitForTaskCompletion(
 	taskID string,
 	opts WaitForTaskCompletionOpts,
 ) ([]prismcommonapi.KVPair, error) {
+	pollInterval := defaultTaskPollInterval
+	if opts.PollInterval != 0 {
+		pollInterval = opts.PollInterval
+	}
+	timeout := defaultTaskTimeout
+	if opts.Timeout != 0 {
+		timeout = opts.Timeout
+	}
+
 	var data []prismcommonapi.KVPair
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, opts.TimeoutOrDefault())
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	if err := wait.PollUntilContextCancel(
 		timeoutCtx,
-		opts.PollIntervalOrDefault(),
+		pollInterval,
 		opts.PollImmediate,
 		func(ctx context.Context) (done bool, err error) {
 			task, err := p.v4Client.TasksApiInstance.GetTaskById(utils.StringPtr(taskID))

@@ -35,7 +35,7 @@ type networkingClient struct {
 }
 
 type ReserveIPOpts struct {
-	AsyncTaskOpts
+	WaitForTaskCompletionOpts
 
 	Cluster string
 }
@@ -84,7 +84,7 @@ func (n *networkingClient) ReserveIP(
 	result, err := n.client.Prism().WaitForTaskCompletion(
 		ctx,
 		*responseData.ExtId,
-		opts.AsyncTaskOpts.WaitForTaskCompletionOpts,
+		opts.WaitForTaskCompletionOpts,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to wait for task completion: %w", err)
@@ -186,7 +186,7 @@ func (n *networkingClient) UnreserveIP(
 	}
 
 	_, err = n.client.Prism().
-		WaitForTaskCompletion(ctx, *responseData.ExtId, opts.AsyncTaskOpts.WaitForTaskCompletionOpts)
+		WaitForTaskCompletion(ctx, *responseData.ExtId, opts.WaitForTaskCompletionOpts)
 	if err != nil {
 		return fmt.Errorf("failed to wait for task completion: %w", err)
 	}
