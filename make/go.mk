@@ -75,7 +75,7 @@ E2E_DRYRUN ?= false
 E2E_VERBOSE ?= $(filter $(E2E_DRYRUN),true) # If dry-run, enable verbosity
 E2E_PARALLEL_NODES ?= $(if $(filter $(E2E_DRYRUN),true),1,$(shell nproc --ignore=1)) # Ginkgo cannot dry-run in parallel
 E2E_FLAKE_ATTEMPTS ?= 1
-E2E_CONF_FILE ?= $(REPO_ROOT)/test/e2e/config/caipamn.yaml
+E2E_CONF_FILE ?= $(REPO_ROOT)/test/e2e/config/caipamx.yaml
 E2E_CONF_FILE_ENVSUBST ?= $(basename $(E2E_CONF_FILE))-envsubst.yaml
 export E2E_DEFAULT_KUBERNETES_VERSION ?= v1.30.3
 ARTIFACTS ?= ${REPO_ROOT}/_artifacts

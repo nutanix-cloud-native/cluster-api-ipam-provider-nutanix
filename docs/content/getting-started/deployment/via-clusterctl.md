@@ -11,18 +11,18 @@ key from this block below:
 
 ```yaml
 providers:
-  - name: "caipamn"
+  - name: "caipamx"
     url: "https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/releases/v{{< param "version" >}}/ipam-components.yaml"
     type: "IPAMProvider"
 ```
 
-we can deploy CAIPAMN and other necessary providers (update infrastructure providers for your needs), leaving all
+we can deploy CAIPAMX and other necessary providers (update infrastructure providers for your needs), leaving all
 configuration values blank as we will specify these when creating clusters:
 
 ```shell
 clusterctl init \
   --infrastructure nutanix \
-  --ipam caipamn:v{{< param "version" >}} \
+  --ipam caipamx:v{{< param "version" >}} \
   --wait-providers
 ```
 

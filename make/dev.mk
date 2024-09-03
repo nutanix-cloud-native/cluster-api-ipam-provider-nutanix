@@ -11,7 +11,8 @@ dev.run-on-kind: SNAPSHOT_VERSION = $(shell gojq -r '.version+"-"+.runtime.goarc
 dev.run-on-kind:
 	kind load docker-image --name $(KIND_CLUSTER_NAME) \
 		ko.local/$(GITHUB_REPOSITORY):$(SNAPSHOT_VERSION)
-	helm upgrade --install $(GITHUB_REPOSITORY) ./charts/$(GITHUB_REPOSITORY) \
+	helm upgrade $(GITHUB_REPOSITORY) ./charts/$(GITHUB_REPOSITORY) \
+		--install \
 		--set-string image.repository=ko.local/$(GITHUB_REPOSITORY) \
 		--set-string image.tag=$(SNAPSHOT_VERSION) \
 		--wait --wait-for-jobs

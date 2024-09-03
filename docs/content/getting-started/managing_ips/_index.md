@@ -4,7 +4,7 @@ icon = "fa-solid fa-seedling"
 weight = 2
 +++
 
-In order to manage IPs via CAIPAMN, a `NutanixIPPool` has to be created via the Kubernetes API. The `NutanixIPPool`
+In order to manage IPs via CAIPAMX, a `NutanixIPPool` has to be created via the Kubernetes API. The `NutanixIPPool`
 specifies which Nutanix cluster and subnet to manage IPs in, and which credentials to use to perform IP operations.
 
 ## Create Nutanix credentials secret
