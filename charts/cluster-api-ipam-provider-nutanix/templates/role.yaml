@@ -55,8 +55,9 @@ rules:
 - apiGroups:
   - ipam.cluster.x-k8s.io
   resources:
-  - ipaddressclaims/status
+  - ipaddressclaims/finalizers
   - ipaddresses/finalizers
+  - nutanixippools/finalizers
   verbs:
   - update
 - apiGroups:
@@ -85,24 +86,6 @@ rules:
   resources:
   - nutanixippools
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
-- apiGroups:
-  - ipam.cluster.x-k8s.io
-  resources:
-  - nutanixippools/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - ipam.cluster.x-k8s.io
-  resources:
-  - nutanixippools/status
-  verbs:
-  - get
-  - patch
-  - update
