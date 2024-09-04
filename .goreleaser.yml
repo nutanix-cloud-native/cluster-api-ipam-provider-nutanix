@@ -24,6 +24,11 @@ release:
   footer: |
     ### Summary
     **Full Changelog**: https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/compare/{{ .PreviousTag }}...{{ .Tag }}
+  extra_files:
+    - glob: ./examples/*.yaml
+    - glob: release-metadata.yaml
+      name_template: metadata.yaml
+    - glob: ipam-components.yaml
 
 archives:
   - name_template: '{{ .ProjectName }}_v{{trimprefix .Version "v"}}_{{ .Os }}_{{ .Arch }}'
