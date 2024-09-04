@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.1 (2024-09-04)
+
+<!-- Release notes generated using configuration in .github/release.yaml at main -->
+
+## What's Changed
+### Other Changes
+* build: Fix up ko image build for release by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/21
+
+
+**Full Changelog**: https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/compare/v0.1.0...v0.1.1
+
 ## 0.1.0 (2024-09-04)
 
 <!-- Release notes generated using configuration in .github/release.yaml at main -->
