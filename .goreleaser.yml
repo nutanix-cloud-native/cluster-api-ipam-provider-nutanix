@@ -100,7 +100,7 @@ kos:
     platforms:
       - linux/amd64
       - linux/arm64
-    repository: ghcr.io/nutanix-cloud-native/{{ .ProjectName}}
+    repository: ghcr.io/nutanix-cloud-native/cluster-api-ipam-provider-nutanix
     bare: true
     tags:
       - v{{trimprefix .Version "v"}}
@@ -108,5 +108,5 @@ kos:
 checksum:
   name_template: 'checksums.txt'
 snapshot:
-  name_template: "{{ incminor .Tag }}-dev"
+  version_template: "{{ incminor .Tag }}-dev"
 report_sizes: true
