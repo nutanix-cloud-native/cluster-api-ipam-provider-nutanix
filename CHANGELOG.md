@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.2 (2024-09-04)
+
+<!-- Release notes generated using configuration in .github/release.yaml at main -->
+
+## What's Changed
+### Other Changes
+* build: Add missing release metadata files to release artifacts by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/23
+
+
+**Full Changelog**: https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/compare/v0.1.1...v0.1.2
+
 ## 0.1.1 (2024-09-04)
 
 <!-- Release notes generated using configuration in .github/release.yaml at main -->
