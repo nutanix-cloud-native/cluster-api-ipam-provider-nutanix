@@ -4,24 +4,43 @@
 package client
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
 
 	"github.com/google/uuid"
-	networkingcommonapi "github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4/models/common/v1/config"
 	networkingapi "github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4/models/networking/v4/config"
 	networkingprismapi "github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4/models/prism/v4/config"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/utils/ptr"
 
 	"github.com/nutanix-cloud-native/prism-go-client/utils"
 )
 
+type ipReserveSpec struct {
+	networkingapi.IpReserveSpec
+}
+
+type IPReservationTypeFunc func(*ipReserveSpec)
+
+func ReserveIPCount(count int64) IPReservationTypeFunc {
+	return func(spec *ipReserveSpec) {
+		spec.ReserveType = ptr.To(networkingapi.RESERVETYPE_IP_ADDRESS_COUNT)
+		spec.Count = &count
+	}
+}
+
+type ReserveIPOpts struct {
+	AsyncTaskOpts
+
+	Cluster       string
+	ClientContext string
+}
+
 type NetworkingClient interface {
-	ReserveIP(ctx context.Context, subnet string, opts ReserveIPOpts) (net.IP, error)
-	UnreserveIP(ctx context.Context, ip net.IP, subnet string, opts UnreserveIPOpts) error
+	ReserveIP(reserveType IPReservationTypeFunc, subnet string, opts ReserveIPOpts) (net.IP, error)
+	UnreserveIP(unreserveType IPUnreservationTypeFunc, subnet string, opts UnreserveIPOpts) error
 	GetSubnet(subnet string, opts GetSubnetOpts) (*Subnet, error)
 }
 
@@ -35,16 +54,8 @@ type networkingClient struct {
 	*client
 }
 
-type ReserveIPOpts struct {
-	WaitForTaskCompletionOpts
-
-	Cluster string
-}
-
 func (n *networkingClient) ReserveIP(
-	ctx context.Context,
-	subnet string,
-	opts ReserveIPOpts,
+	reserveType IPReservationTypeFunc, subnet string, opts ReserveIPOpts,
 ) (ip net.IP, err error) {
 	apiSubnet, err := n.GetSubnet(subnet, GetSubnetOpts{Cluster: opts.Cluster})
 	if err != nil {
@@ -53,13 +64,17 @@ func (n *networkingClient) ReserveIP(
 
 	subnetUUID := apiSubnet.ExtID()
 
-	reserveType := networkingapi.RESERVETYPE_IP_ADDRESS_COUNT
+	ipReserveSpec := ipReserveSpec{}
+	reserveType(&ipReserveSpec)
+
+	if opts.ClientContext != "" {
+		ipReserveSpec.ClientContext = ptr.To(opts.ClientContext)
+	}
+
 	reserveIPResponse, err := n.v4Client.SubnetIPReservationApi.ReserveIpsBySubnetId(
 		utils.StringPtr(subnetUUID.String()),
-		&networkingapi.IpReserveSpec{
-			Count:       utils.Int64Ptr(1),
-			ReserveType: &reserveType,
-		},
+		&ipReserveSpec.IpReserveSpec,
+		opts.AsyncTaskOpts.ToRequestHeaders(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reserve IP in subnet %s: %w", subnet, err)
@@ -79,13 +94,11 @@ func (n *networkingClient) ReserveIP(
 		)
 	}
 
-	result, err := n.client.Prism().WaitForTaskCompletion(
-		ctx,
+	result, err := n.client.Prism().GetTaskData(
 		*responseData.ExtId,
-		opts.WaitForTaskCompletionOpts,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to wait for task completion: %w", err)
+		return nil, fmt.Errorf("task has not successfully completed: %w", err)
 	}
 
 	if len(result) == 0 {
@@ -133,13 +146,27 @@ func (n *networkingClient) ReserveIP(
 	return reservedIP, nil
 }
 
-type UnreserveIPOpts = ReserveIPOpts
+type ipUnreserveSpec struct {
+	networkingapi.IpUnreserveSpec
+}
+
+type IPUnreservationTypeFunc func(*ipUnreserveSpec)
+
+func UnreserveIPClientContext(clientContext string) IPUnreservationTypeFunc {
+	return func(spec *ipUnreserveSpec) {
+		spec.UnreserveType = ptr.To(networkingapi.UNRESERVETYPE_CONTEXT)
+		spec.ClientContext = ptr.To(clientContext)
+	}
+}
+
+type UnreserveIPOpts struct {
+	AsyncTaskOpts
+
+	Cluster string
+}
 
 func (n *networkingClient) UnreserveIP(
-	ctx context.Context,
-	ip net.IP,
-	subnet string,
-	opts UnreserveIPOpts,
+	unreserveType IPUnreservationTypeFunc, subnet string, opts UnreserveIPOpts,
 ) error {
 	apiSubnet, err := n.GetSubnet(subnet, GetSubnetOpts{Cluster: opts.Cluster})
 	if err != nil {
@@ -148,22 +175,13 @@ func (n *networkingClient) UnreserveIP(
 
 	subnetUUID := apiSubnet.ExtID()
 
-	ipAddress := networkingcommonapi.NewIPAddress()
-	if ip.To4() != nil {
-		ipAddress.Ipv4 = networkingcommonapi.NewIPv4Address()
-		ipAddress.Ipv4.Value = utils.StringPtr(ip.String())
-	} else {
-		ipAddress.Ipv6 = networkingcommonapi.NewIPv6Address()
-		ipAddress.Ipv6.Value = utils.StringPtr(ip.String())
-	}
+	ipUnreserveSpec := ipUnreserveSpec{}
+	unreserveType(&ipUnreserveSpec)
 
-	unreserveType := networkingapi.UNRESERVETYPE_IP_ADDRESS_LIST
 	unreserveIPResponse, err := n.v4Client.SubnetIPReservationApi.UnreserveIpsBySubnetId(
 		utils.StringPtr(subnetUUID.String()),
-		&networkingapi.IpUnreserveSpec{
-			UnreserveType: &unreserveType,
-			IpAddresses:   []networkingcommonapi.IPAddress{*ipAddress},
-		},
+		&ipUnreserveSpec.IpUnreserveSpec,
+		opts.AsyncTaskOpts.ToRequestHeaders(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to unreserve IP in subnet %s: %w", subnet, err)
@@ -180,16 +198,13 @@ func (n *networkingClient) UnreserveIP(
 		return fmt.Errorf("no task id found in response: %+v", unreserveIPResponse.GetData())
 	}
 
-	_, err = n.client.Prism().
-		WaitForTaskCompletion(ctx, *responseData.ExtId, opts.WaitForTaskCompletionOpts)
+	_, err = n.client.Prism().GetTaskData(*responseData.ExtId)
 	if err != nil {
-		return fmt.Errorf("failed to wait for task completion: %w", err)
+		return fmt.Errorf("task has not successfully completed: %w", err)
 	}
 
 	return nil
 }
-
-type GetSubnetOpts = ReserveIPOpts
 
 type Subnet struct {
 	extID uuid.UUID
@@ -197,6 +212,10 @@ type Subnet struct {
 
 func (s *Subnet) ExtID() uuid.UUID {
 	return s.extID
+}
+
+type GetSubnetOpts struct {
+	Cluster string
 }
 
 func (n *networkingClient) GetSubnet(
