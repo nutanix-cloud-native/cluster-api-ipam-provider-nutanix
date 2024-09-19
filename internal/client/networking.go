@@ -18,38 +18,52 @@ import (
 	"github.com/nutanix-cloud-native/prism-go-client/utils"
 )
 
-type ipReserveSpec struct {
+// internalReserveSpec holds the configuration for reserving an IP address. This is an unexported type to
+// prevent users from mutating the IP reservation configuration without going through the supported
+// IPReservationTypeFunc functions.
+type internalReserveSpec struct {
 	networkingapi.IpReserveSpec
 }
 
-type IPReservationTypeFunc func(*ipReserveSpec)
+// IPReservationTypeFunc is a function that configures an IP reservation.
+type IPReservationTypeFunc func(*internalReserveSpec)
 
+// ReserveIPCount configures the IP reservation to reserve a specific number of IP addresses.
 func ReserveIPCount(count int64) IPReservationTypeFunc {
-	return func(spec *ipReserveSpec) {
+	return func(spec *internalReserveSpec) {
 		spec.ReserveType = ptr.To(networkingapi.RESERVETYPE_IP_ADDRESS_COUNT)
 		spec.Count = &count
 	}
 }
 
+// ReserveIPOpts holds optional configuration for reserving an IP address.
 type ReserveIPOpts struct {
 	AsyncTaskOpts
 
-	Cluster       string
+	// Cluster is the name of the cluster where the subnet is located. Only required if using the subnet
+	// name rather than the extIDi.
+	Cluster string
+
+	// ClientContext is an optional context to associate with the reservation. This can be used to unreserve
+	// the IP address later, ensuring that no IPs are leaked.
 	ClientContext string
 }
 
+// NetworkingClient is the interface for interacting with the networking API.
 type NetworkingClient interface {
 	ReserveIP(reserveType IPReservationTypeFunc, subnet string, opts ReserveIPOpts) (net.IP, error)
 	UnreserveIP(unreserveType IPUnreservationTypeFunc, subnet string, opts UnreserveIPOpts) error
 	GetSubnet(subnet string, opts GetSubnetOpts) (*Subnet, error)
 }
 
+// Networking returns a client for interacting with the networking API.
 func (c *client) Networking() NetworkingClient {
 	return &networkingClient{
 		client: c,
 	}
 }
 
+// networkingClient is the implementation of the NetworkingClient interface.
 type networkingClient struct {
 	*client
 }
@@ -64,16 +78,16 @@ func (n *networkingClient) ReserveIP(
 
 	subnetUUID := apiSubnet.ExtID()
 
-	ipReserveSpec := ipReserveSpec{}
-	reserveType(&ipReserveSpec)
+	reservation := internalReserveSpec{}
+	reserveType(&reservation)
 
 	if opts.ClientContext != "" {
-		ipReserveSpec.ClientContext = ptr.To(opts.ClientContext)
+		reservation.ClientContext = ptr.To(opts.ClientContext)
 	}
 
 	reserveIPResponse, err := n.v4Client.SubnetIPReservationApi.ReserveIpsBySubnetId(
 		utils.StringPtr(subnetUUID.String()),
-		&ipReserveSpec.IpReserveSpec,
+		&reservation.IpReserveSpec,
 		opts.AsyncTaskOpts.ToRequestHeaders(),
 	)
 	if err != nil {
@@ -146,22 +160,30 @@ func (n *networkingClient) ReserveIP(
 	return reservedIP, nil
 }
 
-type ipUnreserveSpec struct {
+// internalUnreserveSpec holds the configuration for unreserving an IP address. This is an unexported type to
+// prevent users from mutating the IP unreservation configuration without going through the supported
+// IPUnreservationTypeFunc functions.
+type internalUnreserveSpec struct {
 	networkingapi.IpUnreserveSpec
 }
 
-type IPUnreservationTypeFunc func(*ipUnreserveSpec)
+// IPUnreservationTypeFunc is a function that configures an IP unreservation.
+type IPUnreservationTypeFunc func(*internalUnreserveSpec)
 
+// UnreserveIPClientContext configures the IP unreservation to unreserve an IP address by client context.
 func UnreserveIPClientContext(clientContext string) IPUnreservationTypeFunc {
-	return func(spec *ipUnreserveSpec) {
+	return func(spec *internalUnreserveSpec) {
 		spec.UnreserveType = ptr.To(networkingapi.UNRESERVETYPE_CONTEXT)
 		spec.ClientContext = ptr.To(clientContext)
 	}
 }
 
+// UnreserveIPOpts holds optional configuration for unreserving an IP address.
 type UnreserveIPOpts struct {
 	AsyncTaskOpts
 
+	// Cluster is the name of the cluster where the subnet is located. Only required if using the subnet
+	// name rather than the extID.
 	Cluster string
 }
 
@@ -175,12 +197,12 @@ func (n *networkingClient) UnreserveIP(
 
 	subnetUUID := apiSubnet.ExtID()
 
-	ipUnreserveSpec := ipUnreserveSpec{}
-	unreserveType(&ipUnreserveSpec)
+	unreservation := internalUnreserveSpec{}
+	unreserveType(&unreservation)
 
 	unreserveIPResponse, err := n.v4Client.SubnetIPReservationApi.UnreserveIpsBySubnetId(
 		utils.StringPtr(subnetUUID.String()),
-		&ipUnreserveSpec.IpUnreserveSpec,
+		&unreservation.IpUnreserveSpec,
 		opts.AsyncTaskOpts.ToRequestHeaders(),
 	)
 	if err != nil {
@@ -206,15 +228,20 @@ func (n *networkingClient) UnreserveIP(
 	return nil
 }
 
+// Subnet represents a subnet in the networking API.
 type Subnet struct {
 	extID uuid.UUID
 }
 
+// ExtID returns the external ID of the subnet.
 func (s *Subnet) ExtID() uuid.UUID {
 	return s.extID
 }
 
+// GetSubnetOpts holds optional configuration for getting a subnet.
 type GetSubnetOpts struct {
+	// Cluster is the name of the cluster where the subnet is located. Only required if using the subnet
+	// name rather than the extID.
 	Cluster string
 }
 

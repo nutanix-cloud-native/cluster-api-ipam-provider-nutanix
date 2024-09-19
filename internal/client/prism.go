@@ -15,19 +15,26 @@ import (
 )
 
 const (
+	// RequestIDHeaderName is the name of the header that carries the request ID.
 	RequestIDHeaderName = "NTNX-Request-Id"
 )
 
 var (
-	ErrTaskFailed    = fmt.Errorf("task failed")
+	// ErrTaskFailed is returned when a task has failed.
+	ErrTaskFailed = fmt.Errorf("task failed")
+	// ErrTaskCancelled is returned when a task has been cancelled.
 	ErrTaskCancelled = fmt.Errorf("task cancelled")
-	ErrTaskOngoing   = fmt.Errorf("task ongoing")
+	// ErrTaskOngoing is returned when a task is still ongoing.
+	ErrTaskOngoing = fmt.Errorf("task ongoing")
 )
 
+// AsyncTaskOpts contains options for asynchronous tasks.
 type AsyncTaskOpts struct {
+	// RequestID is the ID of the request. This will be used to set the request ID header.
 	RequestID string
 }
 
+// ToRequestHeaders converts the options to a map of request headers.
 func (o AsyncTaskOpts) ToRequestHeaders() map[string]interface{} {
 	if o.RequestID == "" {
 		return nil
@@ -37,10 +44,12 @@ func (o AsyncTaskOpts) ToRequestHeaders() map[string]interface{} {
 	return headers
 }
 
+// PrismClient is the interface for interacting with Prism.
 type PrismClient interface {
 	GetTaskData(taskID string) ([]prismcommonapi.KVPair, error)
 }
 
+// Prism returns a PrismClient.
 func (c *client) Prism() PrismClient {
 	return &prismClient{v4Client: c.v4Client}
 }
