@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0 (2024-09-19)
+
+<!-- Release notes generated using configuration in .github/release.yaml at main -->
+
+## What's Changed
+### Exciting New Features 🎉
+* feat: Store ntnx API req ID as annotations on IPAddressClaim by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/27
+### Fixes 🔧
+* fix: Use recommended provider label from clusterctl by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/25
+
+
+**Full Changelog**: https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/compare/v0.1.2...v0.2.0
+
 ## 0.1.2 (2024-09-04)
 
 <!-- Release notes generated using configuration in .github/release.yaml at main -->
