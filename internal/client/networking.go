@@ -5,6 +5,7 @@ package client
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -112,7 +113,14 @@ func (n *networkingClient) ReserveIP(
 		*responseData.ExtId,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("task has not successfully completed: %w", err)
+		switch {
+		case errors.Is(err, ErrTaskOngoing),
+			errors.Is(err, ErrTaskFailed),
+			errors.Is(err, ErrTaskCancelled):
+			return nil, err
+		default:
+			return nil, fmt.Errorf("failed to check task status: %w", err)
+		}
 	}
 
 	if len(result) == 0 {
@@ -222,7 +230,14 @@ func (n *networkingClient) UnreserveIP(
 
 	_, err = n.client.Prism().GetTaskData(*responseData.ExtId)
 	if err != nil {
-		return fmt.Errorf("task has not successfully completed: %w", err)
+		switch {
+		case errors.Is(err, ErrTaskOngoing),
+			errors.Is(err, ErrTaskFailed),
+			errors.Is(err, ErrTaskCancelled):
+			return err
+		default:
+			return fmt.Errorf("failed to check task status: %w", err)
+		}
 	}
 
 	return nil
