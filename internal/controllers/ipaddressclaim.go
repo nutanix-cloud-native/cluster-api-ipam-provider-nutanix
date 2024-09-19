@@ -6,9 +6,9 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"net"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/spf13/pflag"
@@ -17,6 +17,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
@@ -38,6 +39,11 @@ import (
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha1"
 	pcclient "github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/index"
+)
+
+const (
+	reserveIPRequestIDAnnotationKey   = "ipam.cluster.x-k8s.io/ntnx-reserve-ip-request-id"
+	unreserveIPRequestIDAnnotationKey = "ipam.cluster.x-k8s.io/ntnx-unreserve-ip-request-id"
 )
 
 type genericNutanixIPPool interface {
@@ -66,7 +72,7 @@ func DefaultReconcilerOptions() reconcilerOptions {
 	return reconcilerOptions{
 		maxConcurrentReconciles: 10,
 		minRequeueTime:          500 * time.Millisecond,
-		maxRequeueTime:          1000 * time.Second,
+		maxRequeueTime:          1 * time.Minute,
 	}
 }
 
@@ -233,13 +239,8 @@ func (h *IPAddressClaimHandler) EnsureAddress(
 	ctx context.Context,
 	address *ipamv1.IPAddress,
 ) (*ctrl.Result, error) {
-	nutanixClient, err := h.getClient()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Nutanix client: %w", err)
-	}
-
 	// Check if the address already exists.
-	err = h.client.Get(ctx, ctrlclient.ObjectKeyFromObject(address), address)
+	err := h.client.Get(ctx, ctrlclient.ObjectKeyFromObject(address), address)
 	// A nil error means the address already exists so nothing to do.
 	if err == nil {
 		return nil, nil
@@ -249,14 +250,54 @@ func (h *IPAddressClaimHandler) EnsureAddress(
 		return nil, fmt.Errorf("failed to check for existing IPAddress: %w", err)
 	}
 
+	reqID, err := ensureRequestIDAnnotation(ctx, h.claim, reserveIPRequestIDAnnotationKey, h.client)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to patch IPAddressClaim to add reserve IP request ID annotation: %w",
+			err,
+		)
+	}
+
+	nutanixClient, err := h.getClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Nutanix client: %w", err)
+	}
+
 	// Now actually reserve the IP address.
 	reservedIP, err := nutanixClient.Networking().ReserveIP(
-		ctx,
+		pcclient.ReserveIPCount(1),
 		h.pool.PoolSpec().Subnet,
-		pcclient.ReserveIPOpts{Cluster: ptr.Deref(h.pool.PoolSpec().Cluster, "")},
+		pcclient.ReserveIPOpts{
+			Cluster: ptr.Deref(h.pool.PoolSpec().Cluster, ""),
+			AsyncTaskOpts: pcclient.AsyncTaskOpts{
+				RequestID: reqID,
+			},
+			ClientContext: string(h.claim.UID),
+		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to reserve IP: %w", err)
+		err = fmt.Errorf("failed to reserve IP: %w", err)
+
+		switch {
+		case errors.Is(err, pcclient.ErrTaskOngoing):
+			return nil, fmt.Errorf("requeuing to wait for task completion: %w", err)
+		default:
+			if clearReqIDErr := clearRequestIDAnnotation(
+				ctx, h.claim, reserveIPRequestIDAnnotationKey, h.client,
+			); clearReqIDErr != nil {
+				err = kerrors.NewAggregate(
+					append(
+						[]error{err},
+						fmt.Errorf(
+							"failed to patch IPAddressClaim to delete reserve IP request ID annotation: %w",
+							clearReqIDErr,
+						),
+					),
+				)
+			}
+		}
+
+		return nil, err
 	}
 
 	address.Spec.Address = reservedIP.String()
@@ -283,18 +324,57 @@ func (h *IPAddressClaimHandler) ReleaseAddress(ctx context.Context) (*ctrl.Resul
 		return nil, fmt.Errorf("failed to get IPAddress: %w", err)
 	}
 
+	reqID, err := ensureRequestIDAnnotation(
+		ctx,
+		h.claim,
+		unreserveIPRequestIDAnnotationKey,
+		h.client,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to patch IPAddressClaim to add unreserve IP request ID annotation: %w",
+			err,
+		)
+	}
+
 	nutanixClient, err := h.getClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Nutanix client: %w", err)
 	}
 
-	if err := nutanixClient.Networking().UnreserveIP(
-		ctx,
-		net.ParseIP(address.Spec.Address),
+	err = nutanixClient.Networking().UnreserveIP(
+		pcclient.UnreserveIPClientContext(string(h.claim.UID)),
 		h.pool.PoolSpec().Subnet,
-		pcclient.UnreserveIPOpts{Cluster: ptr.Deref(h.pool.PoolSpec().Cluster, "")},
-	); err != nil {
-		return nil, fmt.Errorf("failed to unreserve IP: %w", err)
+		pcclient.UnreserveIPOpts{
+			Cluster: ptr.Deref(h.pool.PoolSpec().Cluster, ""),
+			AsyncTaskOpts: pcclient.AsyncTaskOpts{
+				RequestID: reqID,
+			},
+		},
+	)
+	if err != nil {
+		err = fmt.Errorf("failed to unreserve IP: %w", err)
+
+		switch {
+		case errors.Is(err, pcclient.ErrTaskOngoing):
+			return nil, fmt.Errorf("requeuing to wait for task completion: %w", err)
+		default:
+			if clearReqIDErr := clearRequestIDAnnotation(
+				ctx, h.claim, unreserveIPRequestIDAnnotationKey, h.client,
+			); clearReqIDErr != nil {
+				err = kerrors.NewAggregate(
+					append(
+						[]error{err},
+						fmt.Errorf(
+							"failed to patch IPAddressClaim to delete unreserve IP request ID annotation: %w",
+							clearReqIDErr,
+						),
+					),
+				)
+			}
+		}
+
+		return nil, err
 	}
 
 	return nil, nil
@@ -367,4 +447,60 @@ func (h *IPAddressClaimHandler) getClient() (pcclient.Client, error) {
 	}
 
 	return c, nil
+}
+
+func ensureRequestIDAnnotation(
+	ctx context.Context,
+	obj ctrlclient.Object,
+	requestAnnotationKey string,
+	cl ctrlclient.Client,
+) (string, error) {
+	// If the claim does not have a request ID annotation set, then we set one
+	// here. This is used so we can send the same reservation request and receive the same task ID back.
+	reqID, found := obj.GetAnnotations()[requestAnnotationKey]
+	if !found {
+		claimPatch := ctrlclient.MergeFrom(obj.DeepCopyObject().(ctrlclient.Object))
+
+		reqUUID, err := uuid.NewV7()
+		if err != nil {
+			return "", fmt.Errorf("failed to generate request UUID: %w", err)
+		}
+
+		reqID = reqUUID.String()
+
+		if obj.GetAnnotations() == nil {
+			obj.SetAnnotations(make(map[string]string, 1))
+		}
+
+		obj.GetAnnotations()[requestAnnotationKey] = reqID
+
+		if err := cl.Patch(ctx, obj, claimPatch); err != nil {
+			return "", fmt.Errorf(
+				"failed to patch object with request ID annotation %q: %w",
+				requestAnnotationKey, err,
+			)
+		}
+	}
+
+	return reqID, nil
+}
+
+func clearRequestIDAnnotation(ctx context.Context,
+	obj ctrlclient.Object,
+	requestAnnotationKey string,
+	cl ctrlclient.Client,
+) error {
+	objPatch := ctrlclient.MergeFrom(obj.DeepCopyObject().(ctrlclient.Object))
+
+	delete(obj.GetAnnotations(), requestAnnotationKey)
+
+	if err := cl.Patch(ctx, obj, objPatch); err != nil {
+		return fmt.Errorf(
+			"failed to patch object with request ID annotation %q: %w",
+			requestAnnotationKey,
+			err,
+		)
+	}
+
+	return nil
 }

@@ -155,7 +155,7 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 					mockNC.EXPECT().ReserveIP(
 						gomock.Any(),
 						pool.Spec.Subnet,
-						pcclient.ReserveIPOpts{Cluster: ""},
+						gomock.Any(),
 					).Return(
 						net.ParseIP("127.0.0.1"), nil,
 					).Times(1)
@@ -167,9 +167,8 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 					mockNC := mockclient.NewMockNetworkingClient(mockController)
 					mockNC.EXPECT().UnreserveIP(
 						gomock.Any(),
-						net.ParseIP("127.0.0.1"),
 						pool.Spec.Subnet,
-						pcclient.UnreserveIPOpts{Cluster: ""},
+						gomock.Any(),
 					).Return(nil).Times(1)
 
 					return mockNC
@@ -237,7 +236,7 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 							mockNC.EXPECT().ReserveIP(
 								gomock.Any(),
 								pool.Spec.Subnet,
-								pcclient.ReserveIPOpts{Cluster: ""},
+								gomock.Any(),
 							).Return(
 								nil, errors.New("task failed"),
 							).Times(1)
@@ -252,7 +251,7 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 							mockNC.EXPECT().ReserveIP(
 								gomock.Any(),
 								pool.Spec.Subnet,
-								pcclient.ReserveIPOpts{Cluster: ""},
+								gomock.Any(),
 							).Return(
 								net.ParseIP("127.0.0.1"), nil,
 							).Times(1)
@@ -266,9 +265,8 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 							mockNC := mockclient.NewMockNetworkingClient(mockController)
 							mockNC.EXPECT().UnreserveIP(
 								gomock.Any(),
-								net.ParseIP("127.0.0.1"),
 								pool.Spec.Subnet,
-								pcclient.UnreserveIPOpts{Cluster: ""},
+								gomock.Any(),
 							).Return(
 								errors.New("task failed"),
 							).Times(1)
@@ -282,9 +280,8 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 							mockNC := mockclient.NewMockNetworkingClient(mockController)
 							mockNC.EXPECT().UnreserveIP(
 								gomock.Any(),
-								net.ParseIP("127.0.0.1"),
 								pool.Spec.Subnet,
-								pcclient.UnreserveIPOpts{Cluster: ""},
+								gomock.Any(),
 							).Return(nil).Times(1)
 							return mockNC
 						}).
