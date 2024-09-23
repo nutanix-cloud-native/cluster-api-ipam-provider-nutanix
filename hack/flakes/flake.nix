@@ -10,23 +10,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       with nixpkgs.legacyPackages.${system}; rec {
         packages = rec {
-          golangci-lint = pkgs.golangci-lint.override { buildGoModule = buildGo123Module; };
           govulncheck = pkgs.govulncheck.override { buildGoModule = buildGo123Module; };
-
-          go-mod-upgrade = buildGo123Module rec {
-            name = "go-mod-upgrade";
-            version = "0.10.0";
-            src = fetchFromGitHub {
-              owner = "oligot";
-              repo = "go-mod-upgrade";
-              rev = "v${version}";
-              hash = "sha256-BuHyqv0rK1giNiPO+eCx13rJ9L6y2oCDdKW1sJXyFg4=";
-            };
-            doCheck = false;
-            subPackages = [ "." ];
-            vendorHash = "sha256-Qx+8DfeZyNSTf5k4juX7+0IXT4zY2LJMuMw3e1HrxBs=";
-            ldflags = [ "-s" "-w" "-X" "main.version=v${version}" ];
-          };
 
           setup-envtest = buildGo123Module rec {
             name = "setup-envtest";
@@ -58,37 +42,17 @@
 
           controller-gen = buildGo123Module rec {
             name = "controller-gen";
-            version = "0.16.2";
+            version = "0.16.3";
             src = fetchFromGitHub {
               owner = "kubernetes-sigs";
               repo = "controller-tools";
               rev = "v${version}";
-              hash = "sha256-f12p9d6c3dXOOSnR//bIAs6wB9359GEeN9P1Lfb1/0Y=";
+              hash = "sha256-Txvzp8OcRTDCAB8nFrqj93X+Kk/sNPSSLOI07J3DwcM=";
             };
             doCheck = false;
             subPackages = [ "./cmd/controller-gen" ];
-            vendorHash = "sha256-3p9K08WMqDRHHa9116//3lFeaMtRaipD4LyisaKWV7I=";
+            vendorHash = "sha256-nwzXlsSG7JF145bf/AJZB1GbGJRHJC7Q73Jty6mHc/w=";
             ldflags = [ "-s" "-w" ];
-          };
-
-          clusterctl = buildGo123Module rec {
-            pname = "clusterctl";
-            version = "1.8.1";
-
-            src = fetchFromGitHub {
-              owner = "kubernetes-sigs";
-              repo = "cluster-api";
-              rev = "v${version}";
-              hash = "sha256-CqUAySELc9jMQD6+BCgnvajEDv8FjU4Ita7v0EFrPug=";
-            };
-            doCheck = false;
-            subPackages = [ "cmd/clusterctl" ];
-            vendorHash = "sha256-ALRnccGjPGuAITtuz79Cao95NhvSczAzspSMXytlw+A=";
-            ldflags = let t = "sigs.k8s.io/cluster-api/version"; in [
-              "-X ${t}.gitMajor=${lib.versions.major version}"
-              "-X ${t}.gitMinor=${lib.versions.minor version}"
-              "-X ${t}.gitVersion=v${version}"
-            ];
           };
 
           helm-schema = buildGo123Module rec {
