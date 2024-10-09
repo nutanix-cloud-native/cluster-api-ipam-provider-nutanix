@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0 (2024-10-09)
+
+<!-- Release notes generated using configuration in .github/release.yaml at main -->
+
+## What's Changed
+### Exciting New Features 🎉
+* feat: Build with go 1.23.1 by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/31
+### Fixes 🔧
+* fix: corrected the path in the docs by @deepakm-ntnx in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/32
+
+## New Contributors
+* @deepakm-ntnx made their first contribution in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/32
+
+**Full Changelog**: https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/compare/v0.2.0...v0.3.0
+
 ## 0.2.0 (2024-09-19)
 
 <!-- Release notes generated using configuration in .github/release.yaml at main -->
