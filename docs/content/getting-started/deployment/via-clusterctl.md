@@ -5,14 +5,14 @@ weight = 1
 +++
 
 Add the following to your `clusterctl.yaml` file, which is normally found at
-`${XDG_CONFIG_HOME}/cluster-api/clusterctl.yaml` (or `${HOME}/cluster-api/clusterctl.yaml`). See [clusterctl
+`${XDG_CONFIG_HOME}/.cluster-api/clusterctl.yaml` (or `${HOME}/.cluster-api/clusterctl.yaml`). See [clusterctl
 configuration file] for more details. If the `providers` section already exists, add the entry and omit the `providers`
 key from this block below:
 
 ```yaml
 providers:
   - name: "caipamx"
-    url: "https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/releases/v{{< param "version" >}}/ipam-components.yaml"
+    url: "https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/releases/latest/ipam-components.yaml"
     type: "IPAMProvider"
 ```
 

@@ -37,7 +37,7 @@ EOF
 ## Create the IP pool
 
 ```shell
-$ export NUTANIX_ENDPOINT=https://<host>:9440
+$ export NUTANIX_ENDPOINT=<pc-ip or pc-fqdn>
 $ export NUTANIX_SUBNET=...
 
 $ cat <<EOF | kubectl apply --server-side -f -
@@ -49,7 +49,7 @@ spec:
   prismCentral:
     address: ${NUTANIX_ENDPOINT}
     port: 9440
-    credentialSecretRef:
+    credentialsSecretRef:
       name: pc-creds-for-ipam
   subnet: ${NUTANIX_SUBNET}
 EOF
