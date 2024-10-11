@@ -12,21 +12,6 @@
         packages = rec {
           govulncheck = pkgs.govulncheck.override { buildGoModule = buildGo123Module; };
 
-          setup-envtest = buildGo123Module rec {
-            name = "setup-envtest";
-            version = "0.19.0";
-            src = fetchFromGitHub {
-              owner = "kubernetes-sigs";
-              repo = "controller-runtime";
-              rev = "v${version}";
-              hash = "sha256-9AqZMiA+OIJD+inmeUc/lq57kV7L85jk1I4ywiSKirg=";
-            } + "/tools/setup-envtest";
-            doCheck = false;
-            subPackages = [ "." ];
-            vendorHash = "sha256-sn3HiKTpQzjrFTOVOGFJwoNpxU+XWgkWD2EOcPilePY=";
-            ldflags = [ "-s" "-w" ];
-          };
-
           release-please = buildNpmPackage rec {
             pname = "release-please";
             version = "16.12.0";
@@ -38,21 +23,6 @@
             };
             npmDepsHash = "sha256-UXWzBUrZCIklITav3VShL+whiWmvLkFw+/i/k0s13k0=";
             dontNpmBuild = true;
-          };
-
-          controller-gen = buildGo123Module rec {
-            name = "controller-gen";
-            version = "0.16.3";
-            src = fetchFromGitHub {
-              owner = "kubernetes-sigs";
-              repo = "controller-tools";
-              rev = "v${version}";
-              hash = "sha256-Txvzp8OcRTDCAB8nFrqj93X+Kk/sNPSSLOI07J3DwcM=";
-            };
-            doCheck = false;
-            subPackages = [ "./cmd/controller-gen" ];
-            vendorHash = "sha256-nwzXlsSG7JF145bf/AJZB1GbGJRHJC7Q73Jty6mHc/w=";
-            ldflags = [ "-s" "-w" ];
           };
 
           helm-schema = buildGo123Module rec {

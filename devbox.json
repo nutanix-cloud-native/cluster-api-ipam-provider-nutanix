@@ -5,6 +5,7 @@
     "clusterctl@latest",
     "coreutils@latest",
     "crane@latest",
+    "mockgen@latest",
     "envsubst@latest",
     "fd@latest",
     "gh@latest",
@@ -12,7 +13,6 @@
     "git@latest",
     "gnused@latest",
     "go@latest",
-    "go-task@latest",
     "gojq@latest",
     "golangci-lint@latest",
     "golines@latest",
@@ -24,16 +24,15 @@
     "ko@latest",
     "kubebuilder@latest",
     "kubectl@latest",
+    "kubernetes-controller-tools@latest",
     "pre-commit@latest",
+    "setup-envtest@latest",
     "shfmt@latest",
     "yamale@latest",
     "yamllint@latest",
-    "path:./hack/flakes#controller-gen",
     "path:./hack/flakes#govulncheck",
     "path:./hack/flakes#helm-with-plugins",
-    "path:./hack/flakes#release-please",
-    "path:./hack/flakes#setup-envtest",
-    "mockgen@latest"
+    "path:./hack/flakes#release-please"
   ],
   "shell": {
     "scripts": {

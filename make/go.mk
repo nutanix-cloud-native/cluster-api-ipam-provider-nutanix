@@ -77,7 +77,7 @@ E2E_PARALLEL_NODES ?= $(if $(filter $(E2E_DRYRUN),true),1,$(shell nproc --ignore
 E2E_FLAKE_ATTEMPTS ?= 1
 E2E_CONF_FILE ?= $(REPO_ROOT)/test/e2e/config/caipamx.yaml
 E2E_CONF_FILE_ENVSUBST ?= $(basename $(E2E_CONF_FILE))-envsubst.yaml
-export E2E_DEFAULT_KUBERNETES_VERSION ?= v1.30.3
+export E2E_DEFAULT_KUBERNETES_VERSION ?= $(KINDEST_IMAGE_TAG)
 ARTIFACTS ?= ${REPO_ROOT}/_artifacts
 
 .PHONY: e2e-test
