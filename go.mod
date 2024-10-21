@@ -18,7 +18,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.47.0
 	github.com/spf13/pflag v1.0.5
-	go.uber.org/mock v0.4.0
+	go.uber.org/mock v0.5.0
 	golang.org/x/time v0.7.0
 	k8s.io/api v0.30.5
 	k8s.io/apimachinery v0.30.5
@@ -26,7 +26,7 @@ require (
 	k8s.io/component-base v0.30.5
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20240902221715-702e33fdd3c3
-	sigs.k8s.io/cluster-api v1.8.3
+	sigs.k8s.io/cluster-api v1.8.4
 	sigs.k8s.io/cluster-api-ipam-provider-in-cluster v0.1.0
 	sigs.k8s.io/controller-runtime v0.18.5
 )
