@@ -14,7 +14,7 @@
 package mockclient
 
 import (
-	net "net"
+	netip "net/netip"
 	reflect "reflect"
 
 	client "github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
@@ -346,10 +346,10 @@ func (c *MockNetworkingClientGetSubnetCall) DoAndReturn(f func(string, client.Ge
 }
 
 // ReserveIP mocks base method.
-func (m *MockNetworkingClient) ReserveIP(arg0 client.IPReservationTypeFunc, arg1 string, arg2 client.ReserveIPOpts) (net.IP, error) {
+func (m *MockNetworkingClient) ReserveIP(arg0 client.IPReservationTypeFunc, arg1 string, arg2 client.ReserveIPOpts) ([]netip.Addr, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReserveIP", arg0, arg1, arg2)
-	ret0, _ := ret[0].(net.IP)
+	ret0, _ := ret[0].([]netip.Addr)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -367,19 +367,19 @@ type MockNetworkingClientReserveIPCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockNetworkingClientReserveIPCall) Return(arg0 net.IP, arg1 error) *MockNetworkingClientReserveIPCall {
+func (c *MockNetworkingClientReserveIPCall) Return(arg0 []netip.Addr, arg1 error) *MockNetworkingClientReserveIPCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockNetworkingClientReserveIPCall) Do(f func(client.IPReservationTypeFunc, string, client.ReserveIPOpts) (net.IP, error)) *MockNetworkingClientReserveIPCall {
+func (c *MockNetworkingClientReserveIPCall) Do(f func(client.IPReservationTypeFunc, string, client.ReserveIPOpts) ([]netip.Addr, error)) *MockNetworkingClientReserveIPCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockNetworkingClientReserveIPCall) DoAndReturn(f func(client.IPReservationTypeFunc, string, client.ReserveIPOpts) (net.IP, error)) *MockNetworkingClientReserveIPCall {
+func (c *MockNetworkingClientReserveIPCall) DoAndReturn(f func(client.IPReservationTypeFunc, string, client.ReserveIPOpts) ([]netip.Addr, error)) *MockNetworkingClientReserveIPCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

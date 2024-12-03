@@ -7,16 +7,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
+	"net/netip"
 	"strconv"
 
 	"github.com/google/uuid"
+	commonapi "github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4/models/common/v1/config"
 	networkingapi "github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4/models/networking/v4/config"
 	networkingprismapi "github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4/models/prism/v4/config"
+	"go4.org/netipx"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/utils/ptr"
 
 	"github.com/nutanix-cloud-native/prism-go-client/utils"
+
+	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/poolutil"
 )
 
 // internalReserveSpec holds the configuration for reserving an IP address. This is an unexported type to
@@ -37,6 +41,45 @@ func ReserveIPCount(count int64) IPReservationTypeFunc {
 	}
 }
 
+// ReserveIPRange configures the IP reservation to reserve a range of IP addresses.
+// A range out of two IPs separated by a hyphen.
+func ReserveIPRange(ipRange string) (IPReservationTypeFunc, error) {
+	ipxRange, err := netipx.ParseIPRange(ipRange)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse IP range %s: %w", ipRange, err)
+	}
+
+	builder := &netipx.IPSetBuilder{}
+	builder.AddRange(ipxRange)
+	ipSet, err := builder.IPSet()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create IP set from range %s: %w", ipRange, err)
+	}
+
+	ipCount := poolutil.IPSetCount(ipSet)
+
+	startIPAddress := commonapi.NewIPAddress()
+	startAddr := ipxRange.From()
+	switch {
+	case startAddr.Is4():
+		ipv4 := commonapi.NewIPv4Address()
+		ipv4.Value = ptr.To(startAddr.String())
+		startIPAddress.Ipv4 = ipv4
+	case startAddr.Is6():
+		ipv6 := commonapi.NewIPv6Address()
+		ipv6.Value = ptr.To(startAddr.String())
+		startIPAddress.Ipv6 = ipv6
+	default:
+		return nil, fmt.Errorf("unexpected IP address type: %s", startAddr)
+	}
+
+	return func(spec *internalReserveSpec) {
+		spec.ReserveType = ptr.To(networkingapi.RESERVETYPE_IP_ADDRESS_RANGE)
+		spec.Count = ptr.To(ipCount)
+		spec.StartIpAddress = startIPAddress
+	}, nil
+}
+
 // ReserveIPOpts holds optional configuration for reserving an IP address.
 type ReserveIPOpts struct {
 	AsyncTaskOpts
@@ -52,7 +95,11 @@ type ReserveIPOpts struct {
 
 // NetworkingClient is the interface for interacting with the networking API.
 type NetworkingClient interface {
-	ReserveIP(reserveType IPReservationTypeFunc, subnet string, opts ReserveIPOpts) (net.IP, error)
+	ReserveIP(
+		reserveType IPReservationTypeFunc,
+		subnet string,
+		opts ReserveIPOpts,
+	) ([]netip.Addr, error)
 	UnreserveIP(unreserveType IPUnreservationTypeFunc, subnet string, opts UnreserveIPOpts) error
 	GetSubnet(subnet string, opts GetSubnetOpts) (*Subnet, error)
 }
@@ -71,7 +118,7 @@ type networkingClient struct {
 
 func (n *networkingClient) ReserveIP(
 	reserveType IPReservationTypeFunc, subnet string, opts ReserveIPOpts,
-) (ip net.IP, err error) {
+) (ips []netip.Addr, err error) {
 	apiSubnet, err := n.GetSubnet(subnet, GetSubnetOpts{Cluster: opts.Cluster})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get subnet %s: %w", subnet, err)
@@ -156,16 +203,16 @@ func (n *networkingClient) ReserveIP(
 	if len(response.ReservedIPs) == 0 {
 		return nil, fmt.Errorf("no IP address reserved")
 	}
-	if len(response.ReservedIPs) > 1 {
-		return nil, fmt.Errorf("unexpected multiple IPs reserved: %+v", response.ReservedIPs)
+	ips = make([]netip.Addr, 0, len(response.ReservedIPs))
+	for _, ip := range response.ReservedIPs {
+		addr, err := netip.ParseAddr(ip)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse reserved IP: %w", err)
+		}
+		ips = append(ips, addr)
 	}
 
-	reservedIP := net.ParseIP(response.ReservedIPs[0])
-	if reservedIP == nil {
-		return nil, fmt.Errorf("failed to parse reserved IP %q", response.ReservedIPs[0])
-	}
-
-	return reservedIP, nil
+	return ips, nil
 }
 
 // internalUnreserveSpec holds the configuration for unreserving an IP address. This is an unexported type to
@@ -184,6 +231,77 @@ func UnreserveIPClientContext(clientContext string) IPUnreservationTypeFunc {
 		spec.UnreserveType = ptr.To(networkingapi.UNRESERVETYPE_CONTEXT)
 		spec.ClientContext = ptr.To(clientContext)
 	}
+}
+
+func UnreserveIPList(ips ...string) (IPUnreservationTypeFunc, error) {
+	ipAddrs := make([]commonapi.IPAddress, 0, len(ips))
+
+	for _, ip := range ips {
+		addr, err := netip.ParseAddr(ip)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse IP address %q: %w", ip, err)
+		}
+
+		ipAddr := commonapi.NewIPAddress()
+		switch {
+		case addr.Is4():
+			ipv4 := commonapi.NewIPv4Address()
+			ipv4.Value = ptr.To(addr.String())
+			ipAddr.Ipv4 = ipv4
+		case addr.Is6():
+			ipv6 := commonapi.NewIPv6Address()
+			ipv6.Value = ptr.To(addr.String())
+			ipAddr.Ipv6 = ipv6
+		default:
+			return nil, fmt.Errorf("unexpected IP address type: %s", addr)
+		}
+
+		ipAddrs = append(ipAddrs, *ipAddr)
+	}
+
+	return func(spec *internalUnreserveSpec) {
+		spec.UnreserveType = ptr.To(networkingapi.UNRESERVETYPE_IP_ADDRESS_LIST)
+		spec.IpAddresses = ipAddrs
+	}, nil
+}
+
+// UnreserveIPRange configures the IP unreservation to unreserve a range of IP addresses.
+// A range out of two IPs separated by a hyphen.
+func UnreserveIPRange(ipRange string) (IPUnreservationTypeFunc, error) {
+	ipxRange, err := netipx.ParseIPRange(ipRange)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse IP range %s: %w", ipRange, err)
+	}
+
+	builder := &netipx.IPSetBuilder{}
+	builder.AddRange(ipxRange)
+	ipSet, err := builder.IPSet()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create IP set from range %s: %w", ipRange, err)
+	}
+
+	ipCount := poolutil.IPSetCount(ipSet)
+
+	startIPAddress := commonapi.NewIPAddress()
+	startAddr := ipxRange.From()
+	switch {
+	case startAddr.Is4():
+		ipv4 := commonapi.NewIPv4Address()
+		ipv4.Value = ptr.To(startAddr.String())
+		startIPAddress.Ipv4 = ipv4
+	case startAddr.Is6():
+		ipv6 := commonapi.NewIPv6Address()
+		ipv6.Value = ptr.To(startAddr.String())
+		startIPAddress.Ipv6 = ipv6
+	default:
+		return nil, fmt.Errorf("unexpected IP address type: %s", startAddr)
+	}
+
+	return func(spec *internalUnreserveSpec) {
+		spec.UnreserveType = ptr.To(networkingapi.UNRESERVETYPE_IP_ADDRESS_RANGE)
+		spec.Count = ptr.To(ipCount)
+		spec.StartIpAddress = startIPAddress
+	}, nil
 }
 
 // UnreserveIPOpts holds optional configuration for unreserving an IP address.

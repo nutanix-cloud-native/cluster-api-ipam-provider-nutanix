@@ -17,8 +17,10 @@ require (
 	github.com/onsi/gomega v1.36.0
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.47.0
+	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	go.uber.org/mock v0.5.0
+	go4.org/netipx v0.0.0-20230303233057-f1b76eb4bb35
 	golang.org/x/time v0.8.0
 	k8s.io/api v0.30.7
 	k8s.io/apimachinery v0.30.7
@@ -73,7 +75,6 @@ require (
 	github.com/prometheus/common v0.45.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
-	github.com/spf13/cobra v1.8.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect

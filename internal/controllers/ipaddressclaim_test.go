@@ -8,7 +8,7 @@ package controllers
 import (
 	"context"
 	"errors"
-	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -157,7 +157,7 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 						pool.Spec.Subnet,
 						gomock.Any(),
 					).Return(
-						net.ParseIP("127.0.0.1"), nil,
+						[]netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil,
 					).Times(1)
 
 					return mockNC
@@ -253,7 +253,7 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 								pool.Spec.Subnet,
 								gomock.Any(),
 							).Return(
-								net.ParseIP("127.0.0.1"), nil,
+								[]netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil,
 							).Times(1)
 							return mockNC
 						}).

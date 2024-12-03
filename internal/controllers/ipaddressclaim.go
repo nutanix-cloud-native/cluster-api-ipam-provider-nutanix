@@ -264,7 +264,7 @@ func (h *IPAddressClaimHandler) EnsureAddress(
 	}
 
 	// Now actually reserve the IP address.
-	reservedIP, err := nutanixClient.Networking().ReserveIP(
+	reservedIPs, err := nutanixClient.Networking().ReserveIP(
 		pcclient.ReserveIPCount(1),
 		h.pool.PoolSpec().Subnet,
 		pcclient.ReserveIPOpts{
@@ -300,7 +300,7 @@ func (h *IPAddressClaimHandler) EnsureAddress(
 		return nil, err
 	}
 
-	address.Spec.Address = reservedIP.String()
+	address.Spec.Address = reservedIPs[0].String()
 
 	return nil, nil
 }
