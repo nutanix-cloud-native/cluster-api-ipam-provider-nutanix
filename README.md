@@ -52,7 +52,7 @@ Alternatively run the following command to download the correct executable for y
 
 <!-- markdownlint-disable MD013 -->
 ```shell
-curl -fsSL https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/releases/download/v0.3.1/caipamx_v0.3.1_"$(uname -s | tr '[:upper:]' '[:lower:]')"_"$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')".tar.gz | tar xzv -- caipamx
+curl -fsSL https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/releases/download/v0.4.0/caipamx_v0.4.0_"$(uname -s | tr '[:upper:]' '[:lower:]')"_"$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')".tar.gz | tar xzv -- caipamx
 ```
 <!-- markdownlint-enable MD013 -->
 
