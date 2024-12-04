@@ -65,7 +65,10 @@ func reserveCmd() *cobra.Command {
 			}
 
 			subnet := viper.GetString("subnet")
-			cluster := viper.GetString("cluster")
+			aosCluster := viper.GetString("aos-cluster")
+			if aosCluster == "" {
+				aosCluster = viper.GetString("cluster")
+			}
 
 			var ips []netip.Addr
 
@@ -83,7 +86,7 @@ func reserveCmd() *cobra.Command {
 							AsyncTaskOpts: client.AsyncTaskOpts{
 								RequestID: requestID.String(),
 							},
-							Cluster: cluster,
+							Cluster: aosCluster,
 						},
 					)
 					if err != nil {

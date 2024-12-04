@@ -57,6 +57,11 @@ func unreserveCmd() *cobra.Command {
 				return fmt.Errorf("failed to generate request ID: %w", err)
 			}
 
+			aosCluster := viper.GetString("aos-cluster")
+			if aosCluster == "" {
+				aosCluster = viper.GetString("cluster")
+			}
+
 			err = wait.PollUntilContextTimeout(
 				context.Background(),
 				time.Second,
@@ -70,7 +75,7 @@ func unreserveCmd() *cobra.Command {
 							AsyncTaskOpts: client.AsyncTaskOpts{
 								RequestID: requestID.String(),
 							},
-							Cluster: viper.GetString("cluster"),
+							Cluster: aosCluster,
 						},
 					)
 					if err != nil {
