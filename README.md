@@ -50,8 +50,8 @@ the releases page.
 
 #### Reserving an IP
 
-```bash
-$ caipamx reserve --help
+```shell
+$ Reserve IP addresses in a subnet
 
 Usage:
   caipamx reserve [flags]
@@ -61,10 +61,10 @@ Flags:
 
 Global Flags:
       --cluster string          Cluster to reserve IPs in, either UUID or name
-      --password string         Password for Nutanix Prism Central
+      --password string         Password for Nutanix Prism Central (also configurable via NUTANIX_PASSWORD environment variable)
       --prism-endpoint string   Address of Nutanix Prism Central
       --subnet string           Subnet to reserve IPs in, either UUID or name
-      --username string         Username for Nutanix Prism Central
+      --user string             Username for Nutanix Prism Central (also configurable via NUTANIX_USER environment variable)
 ```
 
 All flags other than `--cluster` are required.
@@ -90,8 +90,7 @@ caipamx reserve <FLAGS> <IP_FROM>-<IP-TO>
 #### Unreserve an IP
 
 ```shell
-$ caipamx unreserve --help
-Unreserve IP addresses in a subnet
+$ Unreserve IP addresses in a subnet
 
 Usage:
   caipamx unreserve [flags]
@@ -101,10 +100,10 @@ Flags:
 
 Global Flags:
       --cluster string          Cluster to reserve IPs in, either UUID or name
-      --password string         Password for Nutanix Prism Central
+      --password string         Password for Nutanix Prism Central (also configurable via NUTANIX_PASSWORD environment variable)
       --prism-endpoint string   Address of Nutanix Prism Central
       --subnet string           Subnet to reserve IPs in, either UUID or name
-      --username string         Username for Nutanix Prism Central
+      --user string             Username for Nutanix Prism Central (also configurable via NUTANIX_USER environment variable)
 ```
 
 ##### Unreserve specific IPs in the specified subnet

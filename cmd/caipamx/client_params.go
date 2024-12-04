@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"github.com/nutanix-cloud-native/prism-go-client/environment/types"
+	"github.com/spf13/viper"
 
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
 )
@@ -20,16 +21,16 @@ type clientParams struct {
 
 var _ client.CachedClientParams = &clientParams{}
 
-func newClientParams(endpoint, username, password string) (*clientParams, error) {
-	endpointURL, err := url.Parse(endpoint)
+func newClientParams() (*clientParams, error) {
+	endpointURL, err := url.Parse(viper.GetString("prism-endpoint"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse endpoint URL: %w", err)
 	}
 
 	return &clientParams{
 		endpoint: endpointURL,
-		username: username,
-		password: password,
+		username: viper.GetString("user"),
+		password: viper.GetString("password"),
 	}, nil
 }
 

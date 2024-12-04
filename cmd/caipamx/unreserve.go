@@ -11,17 +11,18 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
 )
 
-func unreserveCmd(cfg *prismConfiguration) *cobra.Command {
+func unreserveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "unreserve",
 		Short: "Unreserve IP addresses in a subnet",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			clientParams, err := newClientParams(cfg.endpoint, cfg.username, cfg.password)
+			clientParams, err := newClientParams()
 			if err != nil {
 				return fmt.Errorf("failed to create client params: %w", err)
 			}
@@ -54,12 +55,12 @@ func unreserveCmd(cfg *prismConfiguration) *cobra.Command {
 			for {
 				err := pcClient.Networking().UnreserveIP(
 					unreserveType,
-					cfg.subnet,
+					viper.GetString("subnet"),
 					client.UnreserveIPOpts{
 						AsyncTaskOpts: client.AsyncTaskOpts{
 							RequestID: requestID.String(),
 						},
-						Cluster: cfg.cluster,
+						Cluster: viper.GetString("cluster"),
 					},
 				)
 				if err != nil {

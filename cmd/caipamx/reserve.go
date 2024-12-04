@@ -12,18 +12,19 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"go4.org/netipx"
 
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
 )
 
-func reserveCmd(cfg *prismConfiguration) *cobra.Command {
+func reserveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "reserve",
 		Short: "Reserve IP addresses in a subnet",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			clientParams, err := newClientParams(cfg.endpoint, cfg.username, cfg.password)
+			clientParams, err := newClientParams()
 			if err != nil {
 				return fmt.Errorf("failed to create client params: %w", err)
 			}
@@ -55,12 +56,12 @@ func reserveCmd(cfg *prismConfiguration) *cobra.Command {
 			for {
 				ips, err := pcClient.Networking().ReserveIP(
 					reserveType,
-					cfg.subnet,
+					viper.GetString("subnet"),
 					client.ReserveIPOpts{
 						AsyncTaskOpts: client.AsyncTaskOpts{
 							RequestID: requestID.String(),
 						},
-						Cluster: cfg.cluster,
+						Cluster: viper.GetString("cluster"),
 					},
 				)
 				if err != nil {
