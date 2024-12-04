@@ -56,7 +56,10 @@ func ReserveIPRangeFunc(ipRange string) (IPReservationTypeFunc, error) {
 		return nil, fmt.Errorf("failed to create IP set from range %s: %w", ipRange, err)
 	}
 
-	ipCount := poolutil.IPSetCount(ipSet)
+	ipCount, err := poolutil.IPSetCount(ipSet)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count IP set: %w", err)
+	}
 
 	startIPAddress := commonapi.NewIPAddress()
 	startAddr := ipxRange.From()
@@ -313,7 +316,10 @@ func UnreserveIPRangeFunc(ipRange string) (IPUnreservationTypeFunc, error) {
 		return nil, fmt.Errorf("failed to create IP set from range %s: %w", ipRange, err)
 	}
 
-	ipCount := poolutil.IPSetCount(ipSet)
+	ipCount, err := poolutil.IPSetCount(ipSet)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count IP set: %w", err)
+	}
 
 	startIPAddress := commonapi.NewIPAddress()
 	startAddr := ipxRange.From()

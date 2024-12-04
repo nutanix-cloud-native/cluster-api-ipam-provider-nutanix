@@ -31,7 +31,7 @@ release:
     - glob: ipam-components.yaml
 
 archives:
-  - name_template: '{{ .ProjectName }}_v{{trimprefix .Version "v"}}_{{ .Os }}_{{ .Arch }}'
+  - name_template: 'caipamx_v{{trimprefix .Version "v"}}_{{ .Os }}_{{ .Arch }}'
     format_overrides:
       - goos: windows
         format: zip
@@ -112,6 +112,7 @@ builds:
       - -X 'k8s.io/component-base/version/verflag.programName={{ .ProjectName }}'
     goos:
       - linux
+      - darwin
     goarch:
       - amd64
       - arm64
