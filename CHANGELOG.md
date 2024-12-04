@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0 (2024-12-04)
+
+<!-- Release notes generated using configuration in .github/release.yaml at main -->
+
+## What's Changed
+### Exciting New Features 🎉
+* feat(cli): Support insecure flag for connecting to Prism by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/48
+### Other Changes
+* docs: Add caipamx CLI download instructions by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/45
+* refactor: Rename cluster flag to aos-cluster by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/49
+
+
+**Full Changelog**: https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/compare/v0.3.1...v0.4.0
+
 ## 0.3.1 (2024-12-04)
 
 <!-- Release notes generated using configuration in .github/release.yaml at main -->
