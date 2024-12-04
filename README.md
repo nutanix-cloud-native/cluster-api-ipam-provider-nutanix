@@ -48,6 +48,14 @@ make kind.delete
 CAIPAMX provides a binary for reservation and unreservation via the CLI. The `caipamx` binary can be downloaded from
 the releases page.
 
+Alternatively run the following command to download the correct executable for your local machine:
+
+<!-- markdownlint-disable MD013 -->
+```shell
+curl -fsSL https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/releases/download/v0.3.1/caipamx_v0.3.1_"$(uname -s | tr '[:upper:]' '[:lower:]')"_"$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')".tar.gz | tar xzv -- caipamx
+```
+<!-- markdownlint-enable MD013 -->
+
 #### Reserving an IP
 
 ```shell
