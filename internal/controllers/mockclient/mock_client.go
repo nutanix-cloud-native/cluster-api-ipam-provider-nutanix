@@ -345,79 +345,79 @@ func (c *MockNetworkingClientGetSubnetCall) DoAndReturn(f func(string, client.Ge
 	return c
 }
 
-// ReserveIP mocks base method.
-func (m *MockNetworkingClient) ReserveIP(arg0 client.IPReservationTypeFunc, arg1 string, arg2 client.ReserveIPOpts) ([]netip.Addr, error) {
+// ReserveIPs mocks base method.
+func (m *MockNetworkingClient) ReserveIPs(arg0 client.IPReservationTypeFunc, arg1 string, arg2 client.ReserveIPOpts) ([]netip.Addr, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReserveIP", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "ReserveIPs", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]netip.Addr)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ReserveIP indicates an expected call of ReserveIP.
-func (mr *MockNetworkingClientMockRecorder) ReserveIP(arg0, arg1, arg2 any) *MockNetworkingClientReserveIPCall {
+// ReserveIPs indicates an expected call of ReserveIPs.
+func (mr *MockNetworkingClientMockRecorder) ReserveIPs(arg0, arg1, arg2 any) *MockNetworkingClientReserveIPsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReserveIP", reflect.TypeOf((*MockNetworkingClient)(nil).ReserveIP), arg0, arg1, arg2)
-	return &MockNetworkingClientReserveIPCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReserveIPs", reflect.TypeOf((*MockNetworkingClient)(nil).ReserveIPs), arg0, arg1, arg2)
+	return &MockNetworkingClientReserveIPsCall{Call: call}
 }
 
-// MockNetworkingClientReserveIPCall wrap *gomock.Call
-type MockNetworkingClientReserveIPCall struct {
+// MockNetworkingClientReserveIPsCall wrap *gomock.Call
+type MockNetworkingClientReserveIPsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockNetworkingClientReserveIPCall) Return(arg0 []netip.Addr, arg1 error) *MockNetworkingClientReserveIPCall {
+func (c *MockNetworkingClientReserveIPsCall) Return(arg0 []netip.Addr, arg1 error) *MockNetworkingClientReserveIPsCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockNetworkingClientReserveIPCall) Do(f func(client.IPReservationTypeFunc, string, client.ReserveIPOpts) ([]netip.Addr, error)) *MockNetworkingClientReserveIPCall {
+func (c *MockNetworkingClientReserveIPsCall) Do(f func(client.IPReservationTypeFunc, string, client.ReserveIPOpts) ([]netip.Addr, error)) *MockNetworkingClientReserveIPsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockNetworkingClientReserveIPCall) DoAndReturn(f func(client.IPReservationTypeFunc, string, client.ReserveIPOpts) ([]netip.Addr, error)) *MockNetworkingClientReserveIPCall {
+func (c *MockNetworkingClientReserveIPsCall) DoAndReturn(f func(client.IPReservationTypeFunc, string, client.ReserveIPOpts) ([]netip.Addr, error)) *MockNetworkingClientReserveIPsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
-// UnreserveIP mocks base method.
-func (m *MockNetworkingClient) UnreserveIP(arg0 client.IPUnreservationTypeFunc, arg1 string, arg2 client.UnreserveIPOpts) error {
+// UnreserveIPs mocks base method.
+func (m *MockNetworkingClient) UnreserveIPs(arg0 client.IPUnreservationTypeFunc, arg1 string, arg2 client.UnreserveIPOpts) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UnreserveIP", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "UnreserveIPs", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// UnreserveIP indicates an expected call of UnreserveIP.
-func (mr *MockNetworkingClientMockRecorder) UnreserveIP(arg0, arg1, arg2 any) *MockNetworkingClientUnreserveIPCall {
+// UnreserveIPs indicates an expected call of UnreserveIPs.
+func (mr *MockNetworkingClientMockRecorder) UnreserveIPs(arg0, arg1, arg2 any) *MockNetworkingClientUnreserveIPsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnreserveIP", reflect.TypeOf((*MockNetworkingClient)(nil).UnreserveIP), arg0, arg1, arg2)
-	return &MockNetworkingClientUnreserveIPCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnreserveIPs", reflect.TypeOf((*MockNetworkingClient)(nil).UnreserveIPs), arg0, arg1, arg2)
+	return &MockNetworkingClientUnreserveIPsCall{Call: call}
 }
 
-// MockNetworkingClientUnreserveIPCall wrap *gomock.Call
-type MockNetworkingClientUnreserveIPCall struct {
+// MockNetworkingClientUnreserveIPsCall wrap *gomock.Call
+type MockNetworkingClientUnreserveIPsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockNetworkingClientUnreserveIPCall) Return(arg0 error) *MockNetworkingClientUnreserveIPCall {
+func (c *MockNetworkingClientUnreserveIPsCall) Return(arg0 error) *MockNetworkingClientUnreserveIPsCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockNetworkingClientUnreserveIPCall) Do(f func(client.IPUnreservationTypeFunc, string, client.UnreserveIPOpts) error) *MockNetworkingClientUnreserveIPCall {
+func (c *MockNetworkingClientUnreserveIPsCall) Do(f func(client.IPUnreservationTypeFunc, string, client.UnreserveIPOpts) error) *MockNetworkingClientUnreserveIPsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockNetworkingClientUnreserveIPCall) DoAndReturn(f func(client.IPUnreservationTypeFunc, string, client.UnreserveIPOpts) error) *MockNetworkingClientUnreserveIPCall {
+func (c *MockNetworkingClientUnreserveIPsCall) DoAndReturn(f func(client.IPUnreservationTypeFunc, string, client.UnreserveIPOpts) error) *MockNetworkingClientUnreserveIPsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

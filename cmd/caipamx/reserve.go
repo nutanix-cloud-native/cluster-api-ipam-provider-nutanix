@@ -76,7 +76,7 @@ func reserveCmd() *cobra.Command {
 				true,
 				func(ctx context.Context) (bool, error) {
 					var err error
-					ips, err = pcClient.Networking().ReserveIP(
+					ips, err = pcClient.Networking().ReserveIPs(
 						reserveType,
 						subnet,
 						client.ReserveIPOpts{

@@ -63,7 +63,7 @@ func unreserveCmd() *cobra.Command {
 				time.Minute,
 				true,
 				func(ctx context.Context) (bool, error) {
-					err := pcClient.Networking().UnreserveIP(
+					err := pcClient.Networking().UnreserveIPs(
 						unreserveType,
 						viper.GetString("subnet"),
 						client.UnreserveIPOpts{

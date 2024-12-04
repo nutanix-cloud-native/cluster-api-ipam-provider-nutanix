@@ -131,12 +131,12 @@ type ReserveIPOpts struct {
 
 // NetworkingClient is the interface for interacting with the networking API.
 type NetworkingClient interface {
-	ReserveIP(
+	ReserveIPs(
 		reserveType IPReservationTypeFunc,
 		subnet string,
 		opts ReserveIPOpts,
 	) ([]netip.Addr, error)
-	UnreserveIP(unreserveType IPUnreservationTypeFunc, subnet string, opts UnreserveIPOpts) error
+	UnreserveIPs(unreserveType IPUnreservationTypeFunc, subnet string, opts UnreserveIPOpts) error
 	GetSubnet(subnet string, opts GetSubnetOpts) (*Subnet, error)
 }
 
@@ -152,7 +152,7 @@ type networkingClient struct {
 	*client
 }
 
-func (n *networkingClient) ReserveIP(
+func (n *networkingClient) ReserveIPs(
 	reserveType IPReservationTypeFunc, subnet string, opts ReserveIPOpts,
 ) (ips []netip.Addr, err error) {
 	apiSubnet, err := n.GetSubnet(subnet, GetSubnetOpts{Cluster: opts.Cluster})
@@ -352,7 +352,7 @@ type UnreserveIPOpts struct {
 	Cluster string
 }
 
-func (n *networkingClient) UnreserveIP(
+func (n *networkingClient) UnreserveIPs(
 	unreserveType IPUnreservationTypeFunc, subnet string, opts UnreserveIPOpts,
 ) error {
 	apiSubnet, err := n.GetSubnet(subnet, GetSubnetOpts{Cluster: opts.Cluster})
