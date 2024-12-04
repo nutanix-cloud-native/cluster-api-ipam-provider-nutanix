@@ -67,10 +67,19 @@ func main() {
 	must(rootCmd.MarkPersistentFlagRequired("subnet"))
 
 	persistentFlags.String(
+		"aos-cluster",
+		"",
+		"Nutanix AOS cluster to reserve IPs in, either UUID or name",
+	)
+
+	// Deprecated flag
+	persistentFlags.String(
 		"cluster",
 		"",
-		"Cluster to reserve IPs in, either UUID or name",
+		"Nutanix AOS cluster to reserve IPs in, either UUID or name",
 	)
+	must(persistentFlags.MarkDeprecated("cluster", "use --aos-cluster instead"))
+	rootCmd.MarkFlagsMutuallyExclusive("cluster", "aos-cluster")
 
 	persistentFlags.Bool(
 		"insecure",

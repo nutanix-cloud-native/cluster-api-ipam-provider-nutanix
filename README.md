@@ -59,7 +59,8 @@ curl -fsSL https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nut
 #### Reserving an IP
 
 ```shell
-$ Reserve IP addresses in a subnet
+$ caipamx reserve --help
+Reserve IP addresses in a subnet
 
 Usage:
   caipamx reserve [flags]
@@ -68,7 +69,7 @@ Flags:
   -h, --help   help for reserve
 
 Global Flags:
-      --cluster string          Cluster to reserve IPs in, either UUID or name
+      --aos-cluster string      Nutanix AOS cluster to reserve IPs in, either UUID or name
       --password string         Password for Nutanix Prism Central (also configurable via NUTANIX_PASSWORD environment variable)
       --prism-endpoint string   Address of Nutanix Prism Central
       --subnet string           Subnet to reserve IPs in, either UUID or name
@@ -98,7 +99,8 @@ caipamx reserve <FLAGS> <IP_FROM>-<IP-TO>
 #### Unreserve an IP
 
 ```shell
-$ Unreserve IP addresses in a subnet
+$ caipamx unreserve --help
+Unreserve IP addresses in a subnet
 
 Usage:
   caipamx unreserve [flags]
@@ -107,7 +109,7 @@ Flags:
   -h, --help   help for unreserve
 
 Global Flags:
-      --cluster string          Cluster to reserve IPs in, either UUID or name
+      --aos-cluster string      Nutanix AOS cluster to reserve IPs in, either UUID or name
       --password string         Password for Nutanix Prism Central (also configurable via NUTANIX_PASSWORD environment variable)
       --prism-endpoint string   Address of Nutanix Prism Central
       --subnet string           Subnet to reserve IPs in, either UUID or name
