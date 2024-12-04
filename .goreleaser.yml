@@ -31,7 +31,7 @@ release:
     - glob: ipam-components.yaml
 
 archives:
-  - name_template: '{{ .ProjectName }}_v{{trimprefix .Version "v"}}_{{ .Os }}_{{ .Arch }}'
+  - name_template: 'caipamx_v{{trimprefix .Version "v"}}_{{ .Os }}_{{ .Arch }}'
     format_overrides:
       - goos: windows
         format: zip
@@ -58,8 +58,8 @@ before:
         metadata.yaml >release-metadata.yaml'
 
 builds:
-  - id: capi-ipam-nutanix
-    dir: ./cmd
+  - id: controller
+    dir: ./cmd/controller
     env:
       - CGO_ENABLED=0
     flags:
@@ -91,11 +91,35 @@ builds:
                   --bare \
                   --platform linux/{{ .Arch }} \
                   -t v{{ trimprefix .Version "v" }}-{{ .Arch }} \
-                  ./cmd
+                  ./cmd/controller
           fi'
+  - id: cli
+    dir: ./cmd/caipamx
+    binary: caipamx
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s
+      - -w
+      - -X 'k8s.io/component-base/version.buildDate={{ .CommitDate }}'
+      - -X 'k8s.io/component-base/version.gitCommit={{ .FullCommit }}'
+      - -X 'k8s.io/component-base/version.gitTreeState={{ .Env.GIT_TREE_STATE }}'
+      - -X 'k8s.io/component-base/version.gitVersion=v{{ trimprefix .Version "v" }}'
+      - -X 'k8s.io/component-base/version.major={{ .Major }}'
+      - -X 'k8s.io/component-base/version.minor={{ .Minor }}'
+      - -X 'k8s.io/component-base/version/verflag.programName={{ .ProjectName }}'
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: '{{ .CommitTimestamp }}'
 
 kos:
-  - build: capi-ipam-nutanix
+  - build: controller
     labels:
       org.opencontainers.image.created: "{{ .CommitDate }}"
       org.opencontainers.image.title: "{{ .ProjectName}}"

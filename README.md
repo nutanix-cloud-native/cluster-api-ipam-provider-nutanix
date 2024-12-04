@@ -42,3 +42,78 @@ To delete the dev KinD cluster, run:
 ```shell
 make kind.delete
 ```
+
+### CLI
+
+CAIPAMX provides a binary for reservation and unreservation via the CLI. The `caipamx` binary can be downloaded from
+the releases page.
+
+#### Reserving an IP
+
+```shell
+$ Reserve IP addresses in a subnet
+
+Usage:
+  caipamx reserve [flags]
+
+Flags:
+  -h, --help   help for reserve
+
+Global Flags:
+      --cluster string          Cluster to reserve IPs in, either UUID or name
+      --password string         Password for Nutanix Prism Central (also configurable via NUTANIX_PASSWORD environment variable)
+      --prism-endpoint string   Address of Nutanix Prism Central
+      --subnet string           Subnet to reserve IPs in, either UUID or name
+      --user string             Username for Nutanix Prism Central (also configurable via NUTANIX_USER environment variable)
+```
+
+All flags other than `--cluster` are required.
+
+##### Reserve a single IP in the specified subnet
+
+```shell
+caipamx reserve <FLAGS>
+```
+
+##### Reserve specific IPs in the specified subnet
+
+```shell
+caipamx reserve <FLAGS> <IP> [<IP>...]
+```
+
+##### Reserve a specific range of IPs in the specified subnet
+
+```shell
+caipamx reserve <FLAGS> <IP_FROM>-<IP-TO>
+```
+
+#### Unreserve an IP
+
+```shell
+$ Unreserve IP addresses in a subnet
+
+Usage:
+  caipamx unreserve [flags]
+
+Flags:
+  -h, --help   help for unreserve
+
+Global Flags:
+      --cluster string          Cluster to reserve IPs in, either UUID or name
+      --password string         Password for Nutanix Prism Central (also configurable via NUTANIX_PASSWORD environment variable)
+      --prism-endpoint string   Address of Nutanix Prism Central
+      --subnet string           Subnet to reserve IPs in, either UUID or name
+      --user string             Username for Nutanix Prism Central (also configurable via NUTANIX_USER environment variable)
+```
+
+##### Unreserve specific IPs in the specified subnet
+
+```shell
+caipamx unreserve <FLAGS> <IP> [<IP>...]
+```
+
+##### Unreserve a specific range of IPs in the specified subnet
+
+```shell
+caipamx unreserve <FLAGS> <IP_FROM>-<IP-TO>
+```
