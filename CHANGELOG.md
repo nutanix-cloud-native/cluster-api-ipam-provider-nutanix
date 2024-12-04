@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1 (2024-12-04)
+
+<!-- Release notes generated using configuration in .github/release.yaml at main -->
+
+## What's Changed
+### Exciting New Features 🎉
+* build: Fix up release archives by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/43
+
+
+**Full Changelog**: https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/compare/v0.3.0...v0.3.1
+
 ## 0.3.0 (2024-12-04)
 
 <!-- Release notes generated using configuration in .github/release.yaml at main -->
