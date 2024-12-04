@@ -33,17 +33,17 @@ type internalReserveSpec struct {
 // IPReservationTypeFunc is a function that configures an IP reservation.
 type IPReservationTypeFunc func(*internalReserveSpec)
 
-// ReserveIPCount configures the IP reservation to reserve a specific number of IP addresses.
-func ReserveIPCount(count int64) IPReservationTypeFunc {
+// ReserveIPCountFunc configures the IP reservation to reserve a specific number of IP addresses.
+func ReserveIPCountFunc(count int64) IPReservationTypeFunc {
 	return func(spec *internalReserveSpec) {
 		spec.ReserveType = ptr.To(networkingapi.RESERVETYPE_IP_ADDRESS_COUNT)
 		spec.Count = &count
 	}
 }
 
-// ReserveIPRange configures the IP reservation to reserve a range of IP addresses.
+// ReserveIPRangeFunc configures the IP reservation to reserve a range of IP addresses.
 // A range out of two IPs separated by a hyphen.
-func ReserveIPRange(ipRange string) (IPReservationTypeFunc, error) {
+func ReserveIPRangeFunc(ipRange string) (IPReservationTypeFunc, error) {
 	ipxRange, err := netipx.ParseIPRange(ipRange)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse IP range %s: %w", ipRange, err)
@@ -77,6 +77,39 @@ func ReserveIPRange(ipRange string) (IPReservationTypeFunc, error) {
 		spec.ReserveType = ptr.To(networkingapi.RESERVETYPE_IP_ADDRESS_RANGE)
 		spec.Count = ptr.To(ipCount)
 		spec.StartIpAddress = startIPAddress
+	}, nil
+}
+
+// ReserveIPListFunc configures the IP reservation to reserve a list of specific IP addresses.
+func ReserveIPListFunc(ips ...string) (IPReservationTypeFunc, error) {
+	ipAddrs := make([]commonapi.IPAddress, 0, len(ips))
+
+	for _, ip := range ips {
+		addr, err := netip.ParseAddr(ip)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse IP address %q: %w", ip, err)
+		}
+
+		ipAddr := commonapi.NewIPAddress()
+		switch {
+		case addr.Is4():
+			ipv4 := commonapi.NewIPv4Address()
+			ipv4.Value = ptr.To(addr.String())
+			ipAddr.Ipv4 = ipv4
+		case addr.Is6():
+			ipv6 := commonapi.NewIPv6Address()
+			ipv6.Value = ptr.To(addr.String())
+			ipAddr.Ipv6 = ipv6
+		default:
+			return nil, fmt.Errorf("unexpected IP address type: %s", addr)
+		}
+
+		ipAddrs = append(ipAddrs, *ipAddr)
+	}
+
+	return func(spec *internalReserveSpec) {
+		spec.ReserveType = ptr.To(networkingapi.RESERVETYPE_IP_ADDRESS_LIST)
+		spec.IpAddresses = ipAddrs
 	}, nil
 }
 
@@ -233,7 +266,7 @@ func UnreserveIPClientContext(clientContext string) IPUnreservationTypeFunc {
 	}
 }
 
-func UnreserveIPList(ips ...string) (IPUnreservationTypeFunc, error) {
+func UnreserveIPListFunc(ips ...string) (IPUnreservationTypeFunc, error) {
 	ipAddrs := make([]commonapi.IPAddress, 0, len(ips))
 
 	for _, ip := range ips {
@@ -265,9 +298,9 @@ func UnreserveIPList(ips ...string) (IPUnreservationTypeFunc, error) {
 	}, nil
 }
 
-// UnreserveIPRange configures the IP unreservation to unreserve a range of IP addresses.
+// UnreserveIPRangeFunc configures the IP unreservation to unreserve a range of IP addresses.
 // A range out of two IPs separated by a hyphen.
-func UnreserveIPRange(ipRange string) (IPUnreservationTypeFunc, error) {
+func UnreserveIPRangeFunc(ipRange string) (IPUnreservationTypeFunc, error) {
 	ipxRange, err := netipx.ParseIPRange(ipRange)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse IP range %s: %w", ipRange, err)

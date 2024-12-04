@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -14,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go4.org/netipx"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
 )
@@ -22,7 +24,13 @@ func reserveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "reserve",
 		Short: "Reserve IP addresses in a subnet",
-		Args:  cobra.MaximumNArgs(1),
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 1 && strings.Contains(args[0], "-") {
+				return fmt.Errorf("only one argument is allowed when reserving an IP range")
+			}
+
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			clientParams, err := newClientParams()
 			if err != nil {
@@ -39,68 +47,89 @@ func reserveCmd() *cobra.Command {
 				return fmt.Errorf("failed to generate request ID: %w", err)
 			}
 
-			reserveType := client.ReserveIPCount(1)
+			var reserveType client.IPReservationTypeFunc
 
-			if len(args) == 1 {
-				ipRange := args[0]
-				if !strings.Contains(ipRange, "-") {
-					ipRange = ipRange + "-" + ipRange
-				}
-
-				reserveType, err = client.ReserveIPRange(ipRange)
+			switch {
+			case len(args) == 0:
+				reserveType = client.ReserveIPCountFunc(1)
+			case len(args) == 1 && strings.Contains(args[0], "-"):
+				reserveType, err = client.ReserveIPRangeFunc(args[0])
 				if err != nil {
 					return fmt.Errorf("failed to create reserve IP range: %w", err)
 				}
-			}
-
-			for {
-				ips, err := pcClient.Networking().ReserveIP(
-					reserveType,
-					viper.GetString("subnet"),
-					client.ReserveIPOpts{
-						AsyncTaskOpts: client.AsyncTaskOpts{
-							RequestID: requestID.String(),
-						},
-						Cluster: viper.GetString("cluster"),
-					},
-				)
+			default:
+				reserveType, err = client.ReserveIPListFunc(args...)
 				if err != nil {
-					if errors.Is(err, client.ErrTaskOngoing) {
-						time.Sleep(1 * time.Second)
-						continue
-					}
-
-					return fmt.Errorf("failed to reserve IP: %w", err)
+					return fmt.Errorf("failed to create reserve IP list: %w", err)
 				}
-
-				switch len(ips) {
-				case 1:
-					fmt.Println(ips[0].String())
-				default:
-					ipSetBuilder := &netipx.IPSetBuilder{}
-					for _, ip := range ips {
-						netIP, err := netip.ParseAddr(ip.String())
-						if err != nil {
-							return fmt.Errorf("failed to parse IP address: %w", err)
-						}
-						ipSetBuilder.Add(netIP)
-					}
-
-					ipSet, err := ipSetBuilder.IPSet()
-					if err != nil {
-						return fmt.Errorf("failed to create IP set: %w", err)
-					}
-
-					ipRanges := ipSet.Ranges()
-					if len(ipRanges) != 1 {
-						return fmt.Errorf("expected exactly one IP range, got %d", len(ipRanges))
-					}
-
-					fmt.Println(ipRanges[0].String())
-				}
-
-				return nil
 			}
+
+			subnet := viper.GetString("subnet")
+			cluster := viper.GetString("cluster")
+
+			var ips []netip.Addr
+
+			err = wait.PollUntilContextTimeout(
+				context.Background(),
+				time.Second,
+				time.Minute,
+				true,
+				func(ctx context.Context) (bool, error) {
+					var err error
+					ips, err = pcClient.Networking().ReserveIP(
+						reserveType,
+						subnet,
+						client.ReserveIPOpts{
+							AsyncTaskOpts: client.AsyncTaskOpts{
+								RequestID: requestID.String(),
+							},
+							Cluster: cluster,
+						},
+					)
+					if err != nil {
+						if errors.Is(err, client.ErrTaskOngoing) {
+							return false, nil
+						}
+
+						return false, fmt.Errorf("failed to reserve IP: %w", err)
+					}
+
+					return true, nil
+				},
+			)
+			if err != nil {
+				return err
+			}
+
+			// The ReserveIP API call returns each IP address that has been reserved. Using an IPSet allows us to display the
+			// returned IPs in a user friendly way, either displaying individual IPs or ranges that have been reserved.
+			ipSetBuilder := &netipx.IPSetBuilder{}
+			for _, ip := range ips {
+				netIP, err := netip.ParseAddr(ip.String())
+				if err != nil {
+					return fmt.Errorf("failed to parse IP address: %w", err)
+				}
+				ipSetBuilder.Add(netIP)
+			}
+
+			// Create the IPSet that can then be converted to IP ranges for pretty printing.
+			ipSet, err := ipSetBuilder.IPSet()
+			if err != nil {
+				return fmt.Errorf("failed to create IP set: %w", err)
+			}
+
+			// Loop through all the constructed ranges. If a range only represents a single IP then just print that single
+			// IP. If a range represents multiple IPs then print the range.
+			for _, ipRange := range ipSet.Ranges() {
+				if ipRange.From() == ipRange.To() {
+					fmt.Println(ipRange.From().String())
+					continue
+				}
+
+				fmt.Println(ipRange.String())
+			}
+
+			return nil
 		},
 	}
 

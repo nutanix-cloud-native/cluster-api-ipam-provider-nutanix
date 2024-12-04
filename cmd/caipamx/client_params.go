@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/nutanix-cloud-native/prism-go-client/environment/types"
 	"github.com/spf13/viper"
+
+	"github.com/nutanix-cloud-native/prism-go-client/environment/types"
 
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
 )

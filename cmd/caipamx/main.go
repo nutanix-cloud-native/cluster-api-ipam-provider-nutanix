@@ -25,7 +25,9 @@ func main() {
 		Short: "CAIPAMX is a tool for reserving and unreserving IP addresses and IP address ranges in Nutanix IPAM subnets",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if u := viper.GetString("user"); u == "" {
-				return fmt.Errorf("user is required, either via the --user flag or the NUTANIX_USER environment variable")
+				return fmt.Errorf(
+					"user is required, either via the --user flag or the NUTANIX_USER environment variable",
+				)
 			}
 			if p := viper.GetString("password"); p == "" {
 				return fmt.Errorf(
