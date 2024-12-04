@@ -18,6 +18,7 @@ type clientParams struct {
 	endpoint *url.URL
 	username string
 	password string
+	insecure bool
 }
 
 var _ client.CachedClientParams = &clientParams{}
@@ -32,6 +33,7 @@ func newClientParams() (*clientParams, error) {
 		endpoint: endpointURL,
 		username: viper.GetString("user"),
 		password: viper.GetString("password"),
+		insecure: viper.GetBool("insecure"),
 	}, nil
 }
 
@@ -42,6 +44,7 @@ func (c *clientParams) ManagementEndpoint() types.ManagementEndpoint {
 			Username: c.username,
 			Password: c.password,
 		},
+		Insecure: c.insecure,
 	}
 }
 

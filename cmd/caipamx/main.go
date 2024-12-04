@@ -72,6 +72,12 @@ func main() {
 		"Cluster to reserve IPs in, either UUID or name",
 	)
 
+	persistentFlags.Bool(
+		"insecure",
+		false,
+		"If true, the Prism Central server certificate will not be validated.",
+	)
+
 	// Bind the flags to viper
 	must(viper.BindPFlags(persistentFlags))
 	// Set the viper environment variable prefix to "nutanix"
