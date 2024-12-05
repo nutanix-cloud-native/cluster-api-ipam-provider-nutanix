@@ -530,7 +530,7 @@ func (n *networkingClient) getSubnetByExtID(subnetExtID uuid.UUID) (*Subnet, err
 	}
 
 	switch apiSubnet := subnet.(type) {
-	case *networkingapi.Subnet:
+	case networkingapi.Subnet:
 		if apiSubnet.ExtId == nil {
 			return nil, fmt.Errorf("no extID found for subnet %q", subnetExtID)
 		}
