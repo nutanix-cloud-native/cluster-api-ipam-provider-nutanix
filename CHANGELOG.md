@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.1 (2024-12-06)
+
+<!-- Release notes generated using configuration in .github/release.yaml at main -->
+
+## What's Changed
+### Fixes 🔧
+* fix: getByExt incorrectly expecting pointers by @dkoshkin in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/51
+
+## New Contributors
+* @dkoshkin made their first contribution in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/51
+
+**Full Changelog**: https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/compare/v0.4.0...v0.4.1
+
 ## 0.4.0 (2024-12-04)
 
 <!-- Release notes generated using configuration in .github/release.yaml at main -->
