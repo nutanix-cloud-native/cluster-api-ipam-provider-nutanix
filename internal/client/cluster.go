@@ -107,7 +107,7 @@ func (n *clusterClient) getClusterByExtID(clusterExtID uuid.UUID) (*Cluster, err
 	}
 
 	switch apiCluster := cluster.(type) {
-	case *clustersapi.Cluster:
+	case clustersapi.Cluster:
 		if apiCluster.ExtId == nil {
 			return nil, fmt.Errorf("no extID found for cluster %q", clusterExtID)
 		}
