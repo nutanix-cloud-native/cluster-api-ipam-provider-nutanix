@@ -20,6 +20,9 @@ func must(err error) {
 }
 
 func main() {
+	// Cleanup function to perform any necessary cleanup on exit.
+	cleanup := func() error { return nil }
+
 	rootCmd := &cobra.Command{
 		Use:   "caipamx",
 		Short: "CAIPAMX is a tool for reserving and unreserving IP addresses and IP address ranges in Nutanix IPAM subnets",
@@ -35,12 +38,33 @@ func main() {
 				)
 			}
 
+			// If the verbose flag is not set, redirect all stderr to a file to hide PC API calls from client output.
+			if !viper.GetBool("verbose") {
+				tempFile, err := os.CreateTemp("", "caipamx-*")
+				if err != nil {
+					fmt.Println(err)
+					os.Exit(1)
+				}
+				// Cleanup function to remove the temporary file used to hide PC API calls from client output.
+				cleanup = func() error {
+					return os.Remove(tempFile.Name())
+				}
+
+				os.Stderr = tempFile
+			}
+
 			return nil
+		},
+		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+			return cleanup()
 		},
 		SilenceUsage: true,
 	}
 
 	rootCmd.Version = version.Get().String()
+	// Set the root command's output to stderr to capture the pointer value at this point so it does not
+	// use the redirected output on error even when verbose flag is false.
+	rootCmd.SetErr(os.Stderr)
 
 	persistentFlags := rootCmd.PersistentFlags()
 	persistentFlags.String(
@@ -85,6 +109,12 @@ func main() {
 		"insecure",
 		false,
 		"If true, the Prism Central server certificate will not be validated.",
+	)
+
+	persistentFlags.Bool(
+		"verbose",
+		false,
+		"If true, show all PC API requests and responses.",
 	)
 
 	// Bind the flags to viper
