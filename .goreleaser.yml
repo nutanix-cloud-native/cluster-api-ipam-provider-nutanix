@@ -34,7 +34,8 @@ archives:
   - name_template: 'caipamx_v{{trimprefix .Version "v"}}_{{ .Os }}_{{ .Arch }}'
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
     allow_different_binary_count: true
 
 before:
@@ -130,7 +131,8 @@ kos:
     platforms:
       - linux/amd64
       - linux/arm64
-    repository: ghcr.io/nutanix-cloud-native/cluster-api-ipam-provider-nutanix
+    repositories:
+      - ghcr.io/nutanix-cloud-native/cluster-api-ipam-provider-nutanix
     bare: true
     tags:
       - v{{trimprefix .Version "v"}}
