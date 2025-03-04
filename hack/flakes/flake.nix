@@ -10,33 +10,31 @@
     flake-utils.lib.eachDefaultSystem (system:
       with nixpkgs.legacyPackages.${system}; rec {
         packages = rec {
-          govulncheck = pkgs.govulncheck.override { buildGoModule = buildGo123Module; };
-
           release-please = buildNpmPackage rec {
             pname = "release-please";
-            version = "16.12.0";
+            version = "16.18.0";
             src = fetchFromGitHub {
               owner = "googleapis";
               repo = "release-please";
               rev = "v${version}";
-              hash = "sha256-M4wsk0Vpkl6JAOM2BdSu8Uud7XA+iRHAaQOxHLux+VE=";
+              hash = "sha256-iY1EblSMCvw6iy8DFJnQRNCST7wycWSV8vdsq+XNpRU=";
             };
-            npmDepsHash = "sha256-UXWzBUrZCIklITav3VShL+whiWmvLkFw+/i/k0s13k0=";
+            npmDepsHash = "sha256-HDi7dFG/jNsszyvrb7ravVKQ7XO7NegnbX9MITcS1eE=";
             dontNpmBuild = true;
           };
 
-          helm-schema = buildGo123Module rec {
+          helm-schema = buildGo124Module rec {
             pname = "helm-schema";
-            version = "1.5.3";
+            version = "1.7.0";
 
             src = fetchFromGitHub {
               owner = "losisin";
               repo = "helm-values-schema-json";
               rev = "v${version}";
-              hash = "sha256-xKEJrNONB+781L1pdRE0EKV+5t/SAQxiKoOahUdjFS8=";
+              hash = "sha256-P/3EcVBo11XxY+S8FyDiSUPQNfgTTqLDmbbc7Up5LNc=";
             };
             doCheck = false;
-            vendorHash = "sha256-F2mT36aYkLjUZbV5GQH8mNMZjGi/70dTENU2rRhAJq4=";
+            vendorHash = "sha256-mT2A6xXlTFYrA6yNpz9jaa69vdetY/OgjNtTvG4jAYs=";
             ldflags = let t = "main"; in [
               "-s"
               "-w"
