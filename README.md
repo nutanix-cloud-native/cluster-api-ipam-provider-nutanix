@@ -24,7 +24,7 @@ make dev.run-on-kind
 eval $(make kind.kubeconfig)
 ```
 
-Pro-tip: to redeploy without rebuilding the binaries, images, etc (useful if you have only changed the Helm chart for
+Pro-tip: to redeploy without rebuilding the binaries, images, etc (useful if you have only changed the deployment
 example), run:
 
 ```shell

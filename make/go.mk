@@ -135,10 +135,23 @@ endif
 
 .PHONY: lint.%
 lint.%: ## Runs golangci-lint for a specific module
-lint.%: ; $(info $(M) linting $* module)
-	$(if $(filter-out root,$*),cd $* && )golines -w $$(GOWORK=off go list -tags e2e ./... | sed "s|^$$(GOWORK=off go list -m)|.|")
+lint.%: golines.% ; $(info $(M) linting $* module)
 	$(if $(filter-out root,$*),cd $* && )golangci-lint run --fix --config=$(GOLANGCI_CONFIG_FILE)
-	$(if $(filter-out root,$*),cd $* && )golines -w $$(GOWORK=off go list -tags e2e ./... | sed "s|^$$(GOWORK=off go list -m)|.|")
+	$(MAKE) golines.$*
+
+.PHONY: golines
+golines: ## Runs golines for all modules in repository
+ifneq ($(wildcard $(REPO_ROOT)/go.mod),)
+golines: golines.root
+endif
+ifneq ($(words $(GO_SUBMODULES_NO_DOCS)),0)
+golines: $(addprefix golines.,$(GO_SUBMODULES_NO_DOCS:/go.mod=))
+endif
+
+.PHONY: golines.%
+golines.%: ## Runs golines for a specific module
+golines.%:
+	$(if $(filter-out root,$*),cd $* && )golines -w --ignored-dirs external $$(GOWORK=off go list -tags e2e ./... | sed "s|^$$(GOWORK=off go list -m)|.|")
 
 .PHONY: mod-tidy
 mod-tidy: ## Run go mod tidy for all modules
@@ -187,13 +200,15 @@ go-fix.%: ; $(info $(M) go fixing $* module)
 go-generate: ## Runs go generate
 go-generate: ; $(info $(M) running go generate)
 	go generate -x ./...
-	controller-gen paths="./..." rbac:headerFile="hack/license-header.yaml.txt",roleName=$(GITHUB_REPOSITORY)-manager-role output:rbac:artifacts:config=charts/$(GITHUB_REPOSITORY)/templates
-	sed --in-place 's/$(GITHUB_REPOSITORY)-manager-role/{{ include "chart.name" . }}-manager-role/' charts/$(GITHUB_REPOSITORY)/templates/role.yaml
+	controller-gen paths="./..." \
+		rbac:headerFile="hack/license-header.yaml.txt",roleName=manager-role
 	controller-gen paths="./api/v1alpha1" \
-	  object:headerFile="hack/license-header.go.txt" output:object:artifacts:config=/dev/null \
-	  crd:headerFile=hack/license-header.yaml.txt output:crd:artifacts:config=./charts/$(GITHUB_REPOSITORY)/crds
-	#$(MAKE) go-fix
-	./hack/enhance-crd-validation.sh
+	  object:headerFile="hack/license-header.go.txt" \
+	  crd:headerFile=hack/license-header.yaml.txt \
+		output:crd:dir=config/crd/bases
+	controller-gen paths="./..." \
+	  webhook:headerFile="hack/license-header.yaml.txt"
+	$(MAKE) go-fix golines
 
 .PHONY: go-mod-upgrade
 go-mod-upgrade: ## Interactive check for direct module dependency upgrades

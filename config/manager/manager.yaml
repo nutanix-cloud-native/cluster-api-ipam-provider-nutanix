@@ -1,0 +1,61 @@
+# Copyright 2025 Nutanix. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+---
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: manager
+    namespace: system
+    labels:
+      control-plane: caipamx-manager
+  spec:
+    selector:
+      matchLabels:
+        control-plane: caipamx-manager
+    replicas: 1
+    template:
+      metadata:
+        labels:
+          control-plane: caipamx-manager
+      spec:
+        containers:
+        - args:
+          - "--leader-elect"
+          - "--v=2"
+          # - "--admission-webhook-cert-dir=/tmp/k8s-webhook-server/webhook-certs"
+          image: controller:latest
+          imagePullPolicy: Always
+          name: manager
+          ports:
+          - containerPort: 8081
+            name: healthz
+            protocol: TCP
+          - containerPort: 8080
+            name: metrics
+            protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: healthz
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            runAsUser: 65532
+            runAsGroup: 65532
+          terminationMessagePolicy: FallbackToLogsOnError
+        securityContext:
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        terminationGracePeriodSeconds: 10
+        tolerations:
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/control-plane
+        serviceAccountName: manager

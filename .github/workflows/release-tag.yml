@@ -54,16 +54,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Package Helm chart and attach to release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          devbox run -- helm package ./charts/${{ github.event.repository.name }} \
-                          --destination . \
-                          --version ${{ github.ref_name }} \
-                          --app-version ${{ github.ref_name }}
-          devbox run -- gh release upload ${{ github.ref_name }} ${{ github.event.repository.name }}-*.tgz
-
       - name: Build GitHub pages
         uses: benc-uk/workflow-dispatch@v1
         with:
