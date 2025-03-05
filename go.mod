@@ -21,7 +21,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
 	go.uber.org/mock v0.5.0
-	go4.org/netipx v0.0.0-20230303233057-f1b76eb4bb35
+	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/time v0.8.0
 	k8s.io/api v0.30.7
 	k8s.io/apimachinery v0.30.7
@@ -30,7 +30,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20240902221715-702e33fdd3c3
 	sigs.k8s.io/cluster-api v1.8.5
-	sigs.k8s.io/cluster-api-ipam-provider-in-cluster v0.1.0
+	sigs.k8s.io/cluster-api-ipam-provider-in-cluster v1.0.0
 	sigs.k8s.io/controller-runtime v0.18.5
 )
 
