@@ -20,9 +20,9 @@ func CRDDirectoryPaths() []string {
 		),
 		filepath.Join(
 			rootModulePath(),
-			"charts",
-			"cluster-api-ipam-provider-nutanix",
-			"crds",
+			"config",
+			"crd",
+			"bases",
 		),
 	}
 }

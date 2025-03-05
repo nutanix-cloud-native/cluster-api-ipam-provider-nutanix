@@ -1,0 +1,16 @@
+# Copyright 2025 Nutanix. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: manager
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+      - name: manager
+        livenessProbe:
+          failureThreshold: 3
+          periodSeconds: 10

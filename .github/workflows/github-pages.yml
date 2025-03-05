@@ -51,22 +51,6 @@ jobs:
         run: if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then npm ci; fi
         working-directory: docs
 
-      - name: Update Helm index
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mapfile -t releases < <( devbox run -- make list-releases )
-          for release in "${releases[@]}"; do
-            if devbox run -- gh release download "${release}" \
-                --pattern '${{ github.event.repository.name }}-*.tgz' \
-                --dir docs/static/helm 2>/dev/null; then
-              devbox run -- helm repo index docs/static/helm \
-                --url "https://github.com/${{ github.repository }}/releases/download/${release}" \
-                --merge docs/static/helm/index.yaml
-              rm -f docs/static/helm/*.tgz
-            fi
-          done
-
       - name: Build with Hugo
         env:
           # For maximum backward compatibility with Hugo modules

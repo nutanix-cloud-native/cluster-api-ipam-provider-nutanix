@@ -4,22 +4,11 @@
 repos:
 - repo: local
   hooks:
-  - id: schema-chart
-    name: schema-chart
-    entry: make schema-chart
-    language: system
-    files: "^charts/[^/]+/values.yaml$"
   - id: golangci-lint
     name: golangci-lint
     entry: make go-generate lint
     language: system
     files: "(.*\\.go|go.mod|go.sum|go.mk)$"
-    pass_filenames: false
-  - id: chart-docs
-    name: chart-docs
-    entry: make chart-docs
-    language: system
-    files: "^charts/"
     pass_filenames: false
   - id: hugo-mod-tidy
     name: hugo-mod-tidy
@@ -46,7 +35,6 @@ repos:
   - id: check-yaml
     args: ["-m", "--unsafe"]
     stages: [pre-commit]
-    exclude: ^charts/.+/templates/
   - id: mixed-line-ending
     args: ["-f", "lf"]
     exclude: \.bat$
@@ -65,7 +53,6 @@ repos:
     stages: [pre-commit]
   - id: end-of-file-fixer
     stages: [pre-commit]
-    exclude: ^charts/[^/]+/README.md$
 - repo: https://github.com/rhysd/actionlint
   rev: v1.7.7
   hooks:
@@ -98,7 +85,7 @@ repos:
   hooks:
   - id: markdownlint
     stages: [pre-commit]
-    exclude: ^(CHANGELOG.md|charts/[^/]+/README.md|.github/pull_request_template.md)$
+    exclude: ^(CHANGELOG.md|.github/pull_request_template.md)$
 - repo: https://github.com/Lucas-C/pre-commit-hooks
   rev: v1.5.5
   hooks:
@@ -116,7 +103,6 @@ repos:
     name: License headers - YAML and Makefiles
     stages: [pre-commit]
     files: (^Makefile|\.(ya?ml|mk))$
-    exclude: ^docs/static/helm/index\.yaml$
     args:
       - --license-filepath
       - hack/license-header.txt

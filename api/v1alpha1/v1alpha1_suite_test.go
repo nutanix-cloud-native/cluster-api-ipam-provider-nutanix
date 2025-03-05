@@ -4,7 +4,7 @@
 package v1alpha1_test
 
 import (
-	"path/filepath"
+	"os/exec"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -33,10 +33,14 @@ var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	By("bootstrapping test environment")
+	crdTempDir := GinkgoT().TempDir()
+
+	Expect(
+		exec.Command("kustomize", "build", "../../config/crd", "-o", crdTempDir).Run(),
+	).To(Succeed())
+
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths: []string{
-			filepath.Join("..", "..", "charts", "cluster-api-ipam-provider-nutanix", "crds"),
-		},
+		CRDDirectoryPaths:     []string{crdTempDir},
 		ErrorIfCRDPathMissing: true,
 	}
 
