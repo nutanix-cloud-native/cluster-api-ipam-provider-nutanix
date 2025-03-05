@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.0 (2025-03-05)
+
+<!-- Release notes generated using configuration in .github/release.yaml at main -->
+
+## What's Changed
+### Exciting New Features 🎉
+* feat: Add verbose flag and hide API calls by default by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/58
+* feat: go 1.24.1 by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/71
+### Fixes 🔧
+* fix: getByExt incorrectly expecting pointers by @dkoshkin in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/51
+### Other Changes
+* build: Update all tools by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/70
+
+## New Contributors
+* @dkoshkin made their first contribution in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/51
+
+**Full Changelog**: https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/compare/v0.4.0...v0.5.0
+
 ## 0.4.0 (2024-12-04)
 
 <!-- Release notes generated using configuration in .github/release.yaml at main -->
