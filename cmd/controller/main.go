@@ -56,6 +56,7 @@ func main() {
 		},
 		HealthProbeBindAddress: ":8081",
 		LeaderElection:         true,
+		LeaderElectionID:       "caipamx-leader-election",
 	}
 
 	pflag.CommandLine.StringVar(
@@ -82,7 +83,7 @@ func main() {
 	pflag.CommandLine.StringVar(
 		&mgrOptions.LeaderElectionID,
 		"leader-election-id",
-		"",
+		mgrOptions.LeaderElectionID,
 		"The name of the resource that leader election will use for holding the leader lock.",
 	)
 

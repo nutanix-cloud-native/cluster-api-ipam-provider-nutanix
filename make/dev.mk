@@ -7,17 +7,13 @@ dev.run-on-kind: kind.create clusterctl.init
 ifndef SKIP_BUILD
 dev.run-on-kind: release-snapshot
 endif
-dev.run-on-kind: SNAPSHOT_VERSION = $(shell gojq -r '.version+"-"+.runtime.goarch' dist/metadata.json)
+dev.run-on-kind: SNAPSHOT_IMAGE = $(shell gojq -r '.[] | select(.type == "Docker Manifest").name | ltrimstr("index.docker.io/library/")' dist/artifacts.json)
 dev.run-on-kind:
-	kind load docker-image --name $(KIND_CLUSTER_NAME) \
-		ko.local/$(GITHUB_REPOSITORY):$(SNAPSHOT_VERSION)
-	helm upgrade $(GITHUB_REPOSITORY) ./charts/$(GITHUB_REPOSITORY) \
-		--install \
-		--set-string image.repository=ko.local/$(GITHUB_REPOSITORY) \
-		--set-string image.tag=$(SNAPSHOT_VERSION) \
-		--wait --wait-for-jobs
-	kubectl rollout restart deployment $(GITHUB_REPOSITORY)
-	kubectl rollout status deployment $(GITHUB_REPOSITORY)
+	kind load docker-image --name $(KIND_CLUSTER_NAME) $(SNAPSHOT_IMAGE)
+	kustomize build ./config/default | \
+	  sed 's|image: .\+$$|image: $(SNAPSHOT_IMAGE)|' | \
+	  sed 's|imagePullPolicy: .\+$$|imagePullPolicy: IfNotPresent|' | \
+	  kubectl apply --server-side -f -
 
 .PHONY: release-please
 release-please:

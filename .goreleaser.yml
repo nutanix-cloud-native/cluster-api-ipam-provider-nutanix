@@ -40,20 +40,8 @@ archives:
 
 before:
   hooks:
-    - |
-      sh -ec 'cat <<EOF > ipam-components.yaml
-      apiVersion: v1
-      kind: Namespace
-      metadata:
-        name: caipamx-system
-      $(helm template {{ .ProjectName }} ./charts/{{ .ProjectName }} \
-        --namespace caipamx-system \
-        --include-crds \
-        --set-string image.tag=v{{ trimprefix .Version "v" }}{{ if .IsSnapshot }}-{{ .Runtime.Goarch }} \
-        --set-string image.repository=ko.local/{{ .ProjectName }}{{ end }} \
-      )
-      EOF'
-    - sed -i -e 's/\${/$${/g' -e 's/v0.0.0-dev/v{{ trimprefix .Version "v" }}/g' ipam-components.yaml
+    - kustomize build ./config/default >ipam-components.yaml
+    - sed -i -e 's/v0.0.0-dev/v{{ trimprefix .Version "v" }}/g' ipam-components.yaml
     - |
       sh -ec 'gojq --yaml-input --yaml-output \
         ".releaseSeries |= (. + [{contract: \"v1beta1\", major: {{ .Major }}, minor: {{ .Minor }}}] | unique)" \
@@ -82,19 +70,6 @@ builds:
       - amd64
       - arm64
     mod_timestamp: '{{ .CommitTimestamp }}'
-    hooks:
-      post:
-        - |
-          sh -ec 'if [ {{ .IsSnapshot }} == true ] && [ {{ .Runtime.Goarch }} == {{ .Arch }} ]; then
-            env SOURCE_DATE_EPOCH=$(date +%s) \
-                KO_DATA_DATE_EPOCH=$(date +%s) \
-                KO_DOCKER_REPO=ko.local/{{ .ProjectName }} \
-                ko build \
-                  --bare \
-                  --platform linux/{{ .Arch }} \
-                  -t v{{ trimprefix .Version "v" }}-{{ .Arch }} \
-                  ./cmd/controller
-          fi'
   - id: cli
     dir: ./cmd/caipamx
     binary: caipamx
