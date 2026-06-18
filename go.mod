@@ -3,9 +3,9 @@
 
 module github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix
 
-go 1.24.0
+go 1.25
 
-toolchain go1.24.1
+toolchain go1.26.3
 
 require (
 	github.com/google/uuid v1.6.0

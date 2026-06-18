@@ -74,13 +74,24 @@ jobs:
       - name: Export golang and golangci-lint versions
         id: versions
         run: |
-          echo "golangci-lint=$(devbox run -- golangci-lint version --format short)" >>"${GITHUB_OUTPUT}"
-          echo "golang=$(devbox run -- go version | grep -o "[[:digit:]]\+.[[:digit:]]\+\(.[[:digit:]]\+\)\?")" >>"${GITHUB_OUTPUT}"
+          golangci_lint_version="$(
+            devbox run -- golangci-lint version --short |
+              sed -n 's/^\([[:digit:]][[:digit:].]*\)$/\1/p' |
+              head -n 1
+          )"
+          go_version="$(
+            devbox run -- go env GOVERSION |
+              sed -n 's/^go//p' |
+              head -n 1
+          )"
+
+          echo "golangci-lint=${golangci_lint_version}" >>"${GITHUB_OUTPUT}"
+          echo "golang=${go_version}" >>"${GITHUB_OUTPUT}"
 
       - name: golangci-lint
         uses: reviewdog/action-golangci-lint@v2
         with:
-          fail_on_error: true
+          fail_level: error
           reporter: github-pr-review
           golangci_lint_version: v${{ steps.versions.outputs.golangci-lint }}
           go_version: v${{ steps.versions.outputs.golang }}
@@ -98,7 +109,7 @@ jobs:
       - name: actionlint
         uses: reviewdog/action-actionlint@v1
         with:
-          fail_on_error: true
+          fail_level: error
           reporter: github-pr-review
 
   pre-commit:
