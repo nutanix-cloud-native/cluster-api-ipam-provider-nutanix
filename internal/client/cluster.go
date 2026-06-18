@@ -4,17 +4,17 @@
 package client
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/google/uuid"
-	clustersapi "github.com/nutanix/ntnx-api-golang-clients/clustermgmt-go-client/v4/models/clustermgmt/v4/config"
 
-	"github.com/nutanix-cloud-native/prism-go-client/utils"
-	v4 "github.com/nutanix-cloud-native/prism-go-client/v4"
+	"github.com/nutanix-cloud-native/prism-go-client/converged"
+	convergedv4 "github.com/nutanix-cloud-native/prism-go-client/converged/v4"
 )
 
 type ClusterClient interface {
-	GetCluster(cluster string) (*Cluster, error)
+	GetCluster(ctx context.Context, cluster string) (*Cluster, error)
 }
 
 type Cluster struct {
@@ -33,27 +33,23 @@ func (c *client) Cluster() ClusterClient {
 }
 
 type clusterClient struct {
-	v4Client *v4.Client
+	v4Client *convergedv4.Client
 	client   Client
 }
 
-func (n *clusterClient) GetCluster(cluster string) (*Cluster, error) {
+func (n *clusterClient) GetCluster(ctx context.Context, cluster string) (*Cluster, error) {
 	clusterUUID, err := uuid.Parse(cluster)
 	if err == nil {
-		return n.getClusterByExtID(clusterUUID)
+		return n.getClusterByExtID(ctx, clusterUUID)
 	}
 
-	return n.getClusterByName(cluster)
+	return n.getClusterByName(ctx, cluster)
 }
 
-func (n *clusterClient) getClusterByName(clusterName string) (*Cluster, error) {
-	response, err := n.v4Client.ClustersApiInstance.ListClusters(
-		nil,
-		nil,
-		utils.StringPtr(fmt.Sprintf(`name eq '%s'`, clusterName)),
-		nil,
-		nil,
-		nil,
+func (n *clusterClient) getClusterByName(ctx context.Context, clusterName string) (*Cluster, error) {
+	apiClusters, err := n.v4Client.Clusters.List(
+		ctx,
+		converged.WithFilter(fmt.Sprintf(`name eq '%s'`, clusterName)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -62,38 +58,33 @@ func (n *clusterClient) getClusterByName(clusterName string) (*Cluster, error) {
 			err,
 		)
 	}
-	clusters := response.GetData()
-	if clusters == nil {
+	if apiClusters == nil {
 		return nil, fmt.Errorf("no cluster found with name %q", clusterName)
 	}
 
-	switch apiClusters := clusters.(type) {
-	case []clustersapi.Cluster:
-		if len(apiClusters) == 0 {
-			return nil, fmt.Errorf("no cluster found with name %q", clusterName)
-		}
-		if len(apiClusters) > 1 {
-			return nil, fmt.Errorf("multiple clusters (%d) found with name %q", len(apiClusters), clusterName)
-		}
-
-		extID := *apiClusters[0].ExtId
-		clusterUUID, err := uuid.Parse(extID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse cluster uuid %q for cluster %q: %w", extID, clusterName, err)
-		}
-
-		return &Cluster{
-			extID: clusterUUID,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown response: %+v", clusters)
+	if len(apiClusters) == 0 {
+		return nil, fmt.Errorf("no cluster found with name %q", clusterName)
 	}
+	if len(apiClusters) > 1 {
+		return nil, fmt.Errorf("multiple clusters (%d) found with name %q", len(apiClusters), clusterName)
+	}
+	if apiClusters[0].ExtId == nil {
+		return nil, fmt.Errorf("no extID found for cluster %q", clusterName)
+	}
+
+	extID := *apiClusters[0].ExtId
+	clusterUUID, err := uuid.Parse(extID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse cluster uuid %q for cluster %q: %w", extID, clusterName, err)
+	}
+
+	return &Cluster{
+		extID: clusterUUID,
+	}, nil
 }
 
-func (n *clusterClient) getClusterByExtID(clusterExtID uuid.UUID) (*Cluster, error) {
-	response, err := n.v4Client.ClustersApiInstance.GetClusterById(
-		utils.StringPtr(clusterExtID.String()),
-	)
+func (n *clusterClient) getClusterByExtID(ctx context.Context, clusterExtID uuid.UUID) (*Cluster, error) {
+	apiCluster, err := n.v4Client.Clusters.Get(ctx, clusterExtID.String())
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to find cluster with extID %q: %w",
@@ -101,31 +92,25 @@ func (n *clusterClient) getClusterByExtID(clusterExtID uuid.UUID) (*Cluster, err
 			err,
 		)
 	}
-	cluster := response.GetData()
-	if cluster == nil {
+	if apiCluster == nil {
 		return nil, fmt.Errorf("no cluster found with extID %q", clusterExtID)
 	}
 
-	switch apiCluster := cluster.(type) {
-	case clustersapi.Cluster:
-		if apiCluster.ExtId == nil {
-			return nil, fmt.Errorf("no extID found for cluster %q", clusterExtID)
-		}
-		clusterUUID, err := uuid.Parse(*apiCluster.ExtId)
-		if err != nil {
-			return nil,
-				fmt.Errorf(
-					"failed to parse cluster extID %q for cluster %q: %w",
-					*apiCluster.ExtId,
-					clusterExtID,
-					err,
-				)
-		}
-
-		return &Cluster{
-			extID: clusterUUID,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown response: %+v", cluster)
+	if apiCluster.ExtId == nil {
+		return nil, fmt.Errorf("no extID found for cluster %q", clusterExtID)
 	}
+	clusterUUID, err := uuid.Parse(*apiCluster.ExtId)
+	if err != nil {
+		return nil,
+			fmt.Errorf(
+				"failed to parse cluster extID %q for cluster %q: %w",
+				*apiCluster.ExtId,
+				clusterExtID,
+				err,
+			)
+	}
+
+	return &Cluster{
+		extID: clusterUUID,
+	}, nil
 }

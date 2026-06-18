@@ -4,6 +4,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,12 +14,11 @@ import (
 	"github.com/google/uuid"
 	commonapi "github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4/models/common/v1/config"
 	networkingapi "github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4/models/networking/v4/config"
-	networkingprismapi "github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4/models/prism/v4/config"
 	"go4.org/netipx"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/utils/ptr"
 
-	"github.com/nutanix-cloud-native/prism-go-client/utils"
+	"github.com/nutanix-cloud-native/prism-go-client/converged"
 
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/poolutil"
 )
@@ -132,12 +132,18 @@ type ReserveIPOpts struct {
 // NetworkingClient is the interface for interacting with the networking API.
 type NetworkingClient interface {
 	ReserveIPs(
+		ctx context.Context,
 		reserveType IPReservationTypeFunc,
 		subnet string,
 		opts ReserveIPOpts,
 	) ([]netip.Addr, error)
-	UnreserveIPs(unreserveType IPUnreservationTypeFunc, subnet string, opts UnreserveIPOpts) error
-	GetSubnet(subnet string, opts GetSubnetOpts) (*Subnet, error)
+	UnreserveIPs(
+		ctx context.Context,
+		unreserveType IPUnreservationTypeFunc,
+		subnet string,
+		opts UnreserveIPOpts,
+	) error
+	GetSubnet(ctx context.Context, subnet string, opts GetSubnetOpts) (*Subnet, error)
 }
 
 // Networking returns a client for interacting with the networking API.
@@ -153,9 +159,9 @@ type networkingClient struct {
 }
 
 func (n *networkingClient) ReserveIPs(
-	reserveType IPReservationTypeFunc, subnet string, opts ReserveIPOpts,
+	ctx context.Context, reserveType IPReservationTypeFunc, subnet string, opts ReserveIPOpts,
 ) (ips []netip.Addr, err error) {
-	apiSubnet, err := n.GetSubnet(subnet, GetSubnetOpts{Cluster: opts.Cluster})
+	apiSubnet, err := n.GetSubnet(ctx, subnet, GetSubnetOpts{Cluster: opts.Cluster})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get subnet %s: %w", subnet, err)
 	}
@@ -169,31 +175,24 @@ func (n *networkingClient) ReserveIPs(
 		reservation.ClientContext = ptr.To(opts.ClientContext)
 	}
 
-	reserveIPResponse, err := n.v4Client.SubnetIPReservationApi.ReserveIpsBySubnetId(
-		utils.StringPtr(subnetUUID.String()),
+	taskRef, err := n.v4Client.Subnets.ReserveIpsBySubnetId(
+		ctx,
+		subnetUUID.String(),
 		&reservation.IpReserveSpec,
-		opts.AsyncTaskOpts.ToRequestHeaders(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reserve IP in subnet %s: %w", subnet, err)
 	}
-
-	responseData, ok := reserveIPResponse.GetData().(networkingprismapi.TaskReference)
-	if !ok {
-		return nil, fmt.Errorf(
-			"unexpected response data type %[1]T: %+[1]v",
-			reserveIPResponse.GetData(),
-		)
-	}
-	if responseData.ExtId == nil {
+	if taskRef == nil || taskRef.ExtId == nil {
 		return nil, fmt.Errorf(
 			"no task id found in response: %+[1]v",
-			reserveIPResponse.GetData(),
+			taskRef,
 		)
 	}
 
 	result, err := n.client.Prism().GetTaskData(
-		*responseData.ExtId,
+		ctx,
+		*taskRef.ExtId,
 	)
 	if err != nil {
 		switch {
@@ -353,9 +352,9 @@ type UnreserveIPOpts struct {
 }
 
 func (n *networkingClient) UnreserveIPs(
-	unreserveType IPUnreservationTypeFunc, subnet string, opts UnreserveIPOpts,
+	ctx context.Context, unreserveType IPUnreservationTypeFunc, subnet string, opts UnreserveIPOpts,
 ) error {
-	apiSubnet, err := n.GetSubnet(subnet, GetSubnetOpts{Cluster: opts.Cluster})
+	apiSubnet, err := n.GetSubnet(ctx, subnet, GetSubnetOpts{Cluster: opts.Cluster})
 	if err != nil {
 		return fmt.Errorf("failed to get subnet %s: %w", subnet, err)
 	}
@@ -365,27 +364,19 @@ func (n *networkingClient) UnreserveIPs(
 	unreservation := internalUnreserveSpec{}
 	unreserveType(&unreservation)
 
-	unreserveIPResponse, err := n.v4Client.SubnetIPReservationApi.UnreserveIpsBySubnetId(
-		utils.StringPtr(subnetUUID.String()),
+	taskRef, err := n.v4Client.Subnets.UnreserveIpsBySubnetId(
+		ctx,
+		subnetUUID.String(),
 		&unreservation.IpUnreserveSpec,
-		opts.AsyncTaskOpts.ToRequestHeaders(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to unreserve IP in subnet %s: %w", subnet, err)
 	}
-
-	responseData, ok := unreserveIPResponse.GetData().(networkingprismapi.TaskReference)
-	if !ok {
-		return fmt.Errorf(
-			"unexpected response data type %[1]T: %+[1]v",
-			unreserveIPResponse.GetData(),
-		)
-	}
-	if responseData.ExtId == nil {
-		return fmt.Errorf("no task id found in response: %+v", unreserveIPResponse.GetData())
+	if taskRef == nil || taskRef.ExtId == nil {
+		return fmt.Errorf("no task id found in response: %+v", taskRef)
 	}
 
-	_, err = n.client.Prism().GetTaskData(*responseData.ExtId)
+	_, err = n.client.Prism().GetTaskData(ctx, *taskRef.ExtId)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrTaskOngoing),
@@ -418,6 +409,7 @@ type GetSubnetOpts struct {
 }
 
 func (n *networkingClient) GetSubnet(
+	ctx context.Context,
 	subnetExtIDOrName string,
 	opts GetSubnetOpts,
 ) (*Subnet, error) {
@@ -425,14 +417,14 @@ func (n *networkingClient) GetSubnet(
 
 	subnetUUID, err := uuid.Parse(subnetExtIDOrName)
 	if err == nil {
-		subnet, errByExtID := n.getSubnetByExtID(subnetUUID)
+		subnet, errByExtID := n.getSubnetByExtID(ctx, subnetUUID)
 		if errByExtID == nil {
 			return subnet, nil
 		}
 		errs = append(errs, errByExtID)
 	}
 
-	subnet, errByName := n.getSubnetByName(subnetExtIDOrName, opts)
+	subnet, errByName := n.getSubnetByName(ctx, subnetExtIDOrName, opts)
 	if errByName != nil {
 		errs = append(errs, errByName)
 		aggErr := kerrors.NewAggregate(errs)
@@ -442,10 +434,10 @@ func (n *networkingClient) GetSubnet(
 	return subnet, nil
 }
 
-func (n *networkingClient) getSubnetByName(subnetName string, opts GetSubnetOpts) (*Subnet, error) {
+func (n *networkingClient) getSubnetByName(ctx context.Context, subnetName string, opts GetSubnetOpts) (*Subnet, error) {
 	filter := fmt.Sprintf(`name eq '%s'`, subnetName)
 	if opts.Cluster != "" {
-		apiCluster, err := n.client.Cluster().GetCluster(opts.Cluster)
+		apiCluster, err := n.client.Cluster().GetCluster(ctx, opts.Cluster)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get cluster %s: %w", opts.Cluster, err)
 		}
@@ -453,13 +445,9 @@ func (n *networkingClient) getSubnetByName(subnetName string, opts GetSubnetOpts
 		filter += fmt.Sprintf(` and clusterReference eq '%s'`, apiCluster.ExtID())
 	}
 
-	response, err := n.v4Client.SubnetsApiInstance.ListSubnets(
-		nil,
-		nil,
-		utils.StringPtr(filter),
-		nil,
-		nil,
-		nil,
+	apiSubnets, err := n.v4Client.Subnets.List(
+		ctx,
+		converged.WithFilter(filter),
 	)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -468,55 +456,33 @@ func (n *networkingClient) getSubnetByName(subnetName string, opts GetSubnetOpts
 			err,
 		)
 	}
-	subnets := response.GetData()
-	if subnets == nil {
+	if apiSubnets == nil {
 		return nil, fmt.Errorf("no subnet found with name %q", subnetName)
 	}
 
-	switch apiSubnets := subnets.(type) {
-	case []networkingapi.Subnet:
-		if len(apiSubnets) == 0 {
-			return nil, fmt.Errorf("no subnet found with name %q", subnetName)
-		}
-		if len(apiSubnets) > 1 {
-			return nil, fmt.Errorf("multiple subnets (%d) found with name %q", len(apiSubnets), subnetName)
-		}
-
-		extID := *apiSubnets[0].ExtId
-		subnetUUID, err := uuid.Parse(extID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse subnet uuid %q for cluster %q: %w", extID, opts.Cluster, err)
-		}
-
-		return &Subnet{
-			extID: subnetUUID,
-		}, nil
-	case []networkingapi.SubnetProjection:
-		if len(apiSubnets) == 0 {
-			return nil, fmt.Errorf("no subnet found with name %s", subnetName)
-		}
-		if len(apiSubnets) > 1 {
-			return nil, fmt.Errorf("multiple subnets (%d) found with name %q", len(apiSubnets), subnetName)
-		}
-
-		extID := *apiSubnets[0].ExtId
-		subnetUUID, err := uuid.Parse(extID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse subnet uuid %q for cluster %q: %w", extID, opts.Cluster, err)
-		}
-
-		return &Subnet{
-			extID: subnetUUID,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown response: %+v", subnets)
+	if len(apiSubnets) == 0 {
+		return nil, fmt.Errorf("no subnet found with name %q", subnetName)
 	}
+	if len(apiSubnets) > 1 {
+		return nil, fmt.Errorf("multiple subnets (%d) found with name %q", len(apiSubnets), subnetName)
+	}
+	if apiSubnets[0].ExtId == nil {
+		return nil, fmt.Errorf("no extID found for subnet %q", subnetName)
+	}
+
+	extID := *apiSubnets[0].ExtId
+	subnetUUID, err := uuid.Parse(extID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse subnet uuid %q for cluster %q: %w", extID, opts.Cluster, err)
+	}
+
+	return &Subnet{
+		extID: subnetUUID,
+	}, nil
 }
 
-func (n *networkingClient) getSubnetByExtID(subnetExtID uuid.UUID) (*Subnet, error) {
-	response, err := n.v4Client.SubnetsApiInstance.GetSubnetById(
-		utils.StringPtr(subnetExtID.String()),
-	)
+func (n *networkingClient) getSubnetByExtID(ctx context.Context, subnetExtID uuid.UUID) (*Subnet, error) {
+	apiSubnet, err := n.v4Client.Subnets.Get(ctx, subnetExtID.String())
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to find subnet with extID %q: %w",
@@ -524,31 +490,25 @@ func (n *networkingClient) getSubnetByExtID(subnetExtID uuid.UUID) (*Subnet, err
 			err,
 		)
 	}
-	subnet := response.GetData()
-	if subnet == nil {
+	if apiSubnet == nil {
 		return nil, fmt.Errorf("no subnet found with extID %q", subnetExtID)
 	}
 
-	switch apiSubnet := subnet.(type) {
-	case networkingapi.Subnet:
-		if apiSubnet.ExtId == nil {
-			return nil, fmt.Errorf("no extID found for subnet %q", subnetExtID)
-		}
-		subnetUUID, err := uuid.Parse(*apiSubnet.ExtId)
-		if err != nil {
-			return nil,
-				fmt.Errorf(
-					"failed to parse subnet extID %q for subnet %q: %w",
-					*apiSubnet.ExtId,
-					subnetExtID,
-					err,
-				)
-		}
-
-		return &Subnet{
-			extID: subnetUUID,
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown response: %+v", subnet)
+	if apiSubnet.ExtId == nil {
+		return nil, fmt.Errorf("no extID found for subnet %q", subnetExtID)
 	}
+	subnetUUID, err := uuid.Parse(*apiSubnet.ExtId)
+	if err != nil {
+		return nil,
+			fmt.Errorf(
+				"failed to parse subnet extID %q for subnet %q: %w",
+				*apiSubnet.ExtId,
+				subnetExtID,
+				err,
+			)
+	}
+
+	return &Subnet{
+		extID: subnetUUID,
+	}, nil
 }

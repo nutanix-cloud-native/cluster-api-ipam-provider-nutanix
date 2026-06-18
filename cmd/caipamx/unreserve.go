@@ -63,12 +63,13 @@ func unreserveCmd() *cobra.Command {
 			}
 
 			err = wait.PollUntilContextTimeout(
-				context.Background(),
+				cmd.Context(),
 				time.Second,
 				time.Minute,
 				true,
 				func(ctx context.Context) (bool, error) {
 					err := pcClient.Networking().UnreserveIPs(
+						ctx,
 						unreserveType,
 						viper.GetString("subnet"),
 						client.UnreserveIPOpts{
