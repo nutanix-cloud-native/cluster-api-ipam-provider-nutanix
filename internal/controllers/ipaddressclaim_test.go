@@ -154,6 +154,7 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 					mockNC := mockclient.NewMockNetworkingClient(mockController)
 					mockNC.EXPECT().ReserveIPs(
 						gomock.Any(),
+						gomock.Any(),
 						pool.Spec.Subnet,
 						gomock.Any(),
 					).Return(
@@ -166,6 +167,7 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 				mockPCClient.EXPECT().Networking().DoAndReturn(func() pcclient.NetworkingClient {
 					mockNC := mockclient.NewMockNetworkingClient(mockController)
 					mockNC.EXPECT().UnreserveIPs(
+						gomock.Any(),
 						gomock.Any(),
 						pool.Spec.Subnet,
 						gomock.Any(),
@@ -235,6 +237,7 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 							mockNC := mockclient.NewMockNetworkingClient(mockController)
 							mockNC.EXPECT().ReserveIPs(
 								gomock.Any(),
+								gomock.Any(),
 								pool.Spec.Subnet,
 								gomock.Any(),
 							).Return(
@@ -249,6 +252,7 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 						DoAndReturn(func() pcclient.NetworkingClient {
 							mockNC := mockclient.NewMockNetworkingClient(mockController)
 							mockNC.EXPECT().ReserveIPs(
+								gomock.Any(),
 								gomock.Any(),
 								pool.Spec.Subnet,
 								gomock.Any(),
@@ -265,6 +269,7 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 							mockNC := mockclient.NewMockNetworkingClient(mockController)
 							mockNC.EXPECT().UnreserveIPs(
 								gomock.Any(),
+								gomock.Any(),
 								pool.Spec.Subnet,
 								gomock.Any(),
 							).Return(
@@ -279,6 +284,7 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 						DoAndReturn(func() pcclient.NetworkingClient {
 							mockNC := mockclient.NewMockNetworkingClient(mockController)
 							mockNC.EXPECT().UnreserveIPs(
+								gomock.Any(),
 								gomock.Any(),
 								pool.Spec.Subnet,
 								gomock.Any(),

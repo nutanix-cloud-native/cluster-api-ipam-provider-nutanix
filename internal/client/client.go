@@ -6,17 +6,19 @@ package client
 import (
 	"fmt"
 
-	v4 "github.com/nutanix-cloud-native/prism-go-client/v4"
+	convergedv4 "github.com/nutanix-cloud-native/prism-go-client/converged/v4"
+	"github.com/nutanix-cloud-native/prism-go-client/environment/types"
+	v4sdk "github.com/nutanix-cloud-native/prism-go-client/v4"
 )
 
-var v4ClientCache = v4.NewClientCache(v4.WithSessionAuth(true))
+var v4ClientCache = convergedv4.NewClientCache(v4sdk.WithSessionAuth(true))
 
-type CachedClientParams = v4.CachedClientParams
+type CachedClientParams = types.CachedClientParams
 
 func GetClient(params CachedClientParams) (Client, error) {
 	v4Client, err := v4ClientCache.GetOrCreate(params)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create v4 API client: %w", err)
+		return nil, fmt.Errorf("failed to create converged v4 API client: %w", err)
 	}
 	return &client{v4Client: v4Client}, nil
 }
@@ -28,5 +30,5 @@ type Client interface {
 }
 
 type client struct {
-	v4Client *v4.Client
+	v4Client *convergedv4.Client
 }
