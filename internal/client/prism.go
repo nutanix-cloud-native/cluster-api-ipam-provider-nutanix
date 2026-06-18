@@ -4,14 +4,14 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	prismcommonapi "github.com/nutanix/ntnx-api-golang-clients/prism-go-client/v4/models/common/v1/config"
 	prismapi "github.com/nutanix/ntnx-api-golang-clients/prism-go-client/v4/models/prism/v4/config"
 
-	"github.com/nutanix-cloud-native/prism-go-client/utils"
-	v4 "github.com/nutanix-cloud-native/prism-go-client/v4"
+	convergedv4 "github.com/nutanix-cloud-native/prism-go-client/converged/v4"
 )
 
 const (
@@ -46,7 +46,7 @@ func (o AsyncTaskOpts) ToRequestHeaders() map[string]interface{} {
 
 // PrismClient is the interface for interacting with Prism.
 type PrismClient interface {
-	GetTaskData(taskID string) ([]prismcommonapi.KVPair, error)
+	GetTaskData(ctx context.Context, taskID string) ([]prismcommonapi.KVPair, error)
 }
 
 // Prism returns a PrismClient.
@@ -55,18 +55,13 @@ func (c *client) Prism() PrismClient {
 }
 
 type prismClient struct {
-	v4Client *v4.Client
+	v4Client *convergedv4.Client
 }
 
-func (p *prismClient) GetTaskData(taskID string) ([]prismcommonapi.KVPair, error) {
-	task, err := p.v4Client.TasksApiInstance.GetTaskById(utils.StringPtr(taskID))
+func (p *prismClient) GetTaskData(ctx context.Context, taskID string) ([]prismcommonapi.KVPair, error) {
+	taskData, err := p.v4Client.Tasks.Get(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task %s: %w", taskID, err)
-	}
-
-	taskData, ok := task.GetData().(prismapi.Task)
-	if !ok {
-		return nil, fmt.Errorf("unexpected task data type %[1]T: %+[1]v", task.GetData())
 	}
 
 	marshaledTaskData, err := json.Marshal(taskData)
@@ -74,7 +69,7 @@ func (p *prismClient) GetTaskData(taskID string) ([]prismcommonapi.KVPair, error
 		return nil, fmt.Errorf("failed to marshal task data: %w", err)
 	}
 
-	if taskData.Status == nil {
+	if taskData == nil || taskData.Status == nil {
 		return nil, fmt.Errorf("%w: %s", ErrTaskOngoing, string(marshaledTaskData))
 	}
 

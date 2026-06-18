@@ -73,13 +73,14 @@ func reserveCmd() *cobra.Command {
 			var ips []netip.Addr
 
 			err = wait.PollUntilContextTimeout(
-				context.Background(),
+				cmd.Context(),
 				time.Second,
 				time.Minute,
 				true,
 				func(ctx context.Context) (bool, error) {
 					var err error
 					ips, err = pcClient.Networking().ReserveIPs(
+						ctx,
 						reserveType,
 						subnet,
 						client.ReserveIPOpts{

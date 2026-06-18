@@ -14,6 +14,7 @@
 package mockclient
 
 import (
+	context "context"
 	netip "net/netip"
 	reflect "reflect"
 
@@ -185,18 +186,18 @@ func (m *MockClusterClient) EXPECT() *MockClusterClientMockRecorder {
 }
 
 // GetCluster mocks base method.
-func (m *MockClusterClient) GetCluster(cluster string) (*client.Cluster, error) {
+func (m *MockClusterClient) GetCluster(ctx context.Context, cluster string) (*client.Cluster, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCluster", cluster)
+	ret := m.ctrl.Call(m, "GetCluster", ctx, cluster)
 	ret0, _ := ret[0].(*client.Cluster)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetCluster indicates an expected call of GetCluster.
-func (mr *MockClusterClientMockRecorder) GetCluster(cluster any) *MockClusterClientGetClusterCall {
+func (mr *MockClusterClientMockRecorder) GetCluster(ctx, cluster any) *MockClusterClientGetClusterCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCluster", reflect.TypeOf((*MockClusterClient)(nil).GetCluster), cluster)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCluster", reflect.TypeOf((*MockClusterClient)(nil).GetCluster), ctx, cluster)
 	return &MockClusterClientGetClusterCall{Call: call}
 }
 
@@ -212,13 +213,13 @@ func (c *MockClusterClientGetClusterCall) Return(arg0 *client.Cluster, arg1 erro
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockClusterClientGetClusterCall) Do(f func(string) (*client.Cluster, error)) *MockClusterClientGetClusterCall {
+func (c *MockClusterClientGetClusterCall) Do(f func(context.Context, string) (*client.Cluster, error)) *MockClusterClientGetClusterCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockClusterClientGetClusterCall) DoAndReturn(f func(string) (*client.Cluster, error)) *MockClusterClientGetClusterCall {
+func (c *MockClusterClientGetClusterCall) DoAndReturn(f func(context.Context, string) (*client.Cluster, error)) *MockClusterClientGetClusterCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -248,18 +249,18 @@ func (m *MockPrismClient) EXPECT() *MockPrismClientMockRecorder {
 }
 
 // GetTaskData mocks base method.
-func (m *MockPrismClient) GetTaskData(taskID string) ([]config.KVPair, error) {
+func (m *MockPrismClient) GetTaskData(ctx context.Context, taskID string) ([]config.KVPair, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTaskData", taskID)
+	ret := m.ctrl.Call(m, "GetTaskData", ctx, taskID)
 	ret0, _ := ret[0].([]config.KVPair)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetTaskData indicates an expected call of GetTaskData.
-func (mr *MockPrismClientMockRecorder) GetTaskData(taskID any) *MockPrismClientGetTaskDataCall {
+func (mr *MockPrismClientMockRecorder) GetTaskData(ctx, taskID any) *MockPrismClientGetTaskDataCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaskData", reflect.TypeOf((*MockPrismClient)(nil).GetTaskData), taskID)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaskData", reflect.TypeOf((*MockPrismClient)(nil).GetTaskData), ctx, taskID)
 	return &MockPrismClientGetTaskDataCall{Call: call}
 }
 
@@ -275,13 +276,13 @@ func (c *MockPrismClientGetTaskDataCall) Return(arg0 []config.KVPair, arg1 error
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockPrismClientGetTaskDataCall) Do(f func(string) ([]config.KVPair, error)) *MockPrismClientGetTaskDataCall {
+func (c *MockPrismClientGetTaskDataCall) Do(f func(context.Context, string) ([]config.KVPair, error)) *MockPrismClientGetTaskDataCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockPrismClientGetTaskDataCall) DoAndReturn(f func(string) ([]config.KVPair, error)) *MockPrismClientGetTaskDataCall {
+func (c *MockPrismClientGetTaskDataCall) DoAndReturn(f func(context.Context, string) ([]config.KVPair, error)) *MockPrismClientGetTaskDataCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -311,18 +312,18 @@ func (m *MockNetworkingClient) EXPECT() *MockNetworkingClientMockRecorder {
 }
 
 // GetSubnet mocks base method.
-func (m *MockNetworkingClient) GetSubnet(subnet string, opts client.GetSubnetOpts) (*client.Subnet, error) {
+func (m *MockNetworkingClient) GetSubnet(ctx context.Context, subnet string, opts client.GetSubnetOpts) (*client.Subnet, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetSubnet", subnet, opts)
+	ret := m.ctrl.Call(m, "GetSubnet", ctx, subnet, opts)
 	ret0, _ := ret[0].(*client.Subnet)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetSubnet indicates an expected call of GetSubnet.
-func (mr *MockNetworkingClientMockRecorder) GetSubnet(subnet, opts any) *MockNetworkingClientGetSubnetCall {
+func (mr *MockNetworkingClientMockRecorder) GetSubnet(ctx, subnet, opts any) *MockNetworkingClientGetSubnetCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubnet", reflect.TypeOf((*MockNetworkingClient)(nil).GetSubnet), subnet, opts)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSubnet", reflect.TypeOf((*MockNetworkingClient)(nil).GetSubnet), ctx, subnet, opts)
 	return &MockNetworkingClientGetSubnetCall{Call: call}
 }
 
@@ -338,30 +339,30 @@ func (c *MockNetworkingClientGetSubnetCall) Return(arg0 *client.Subnet, arg1 err
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockNetworkingClientGetSubnetCall) Do(f func(string, client.GetSubnetOpts) (*client.Subnet, error)) *MockNetworkingClientGetSubnetCall {
+func (c *MockNetworkingClientGetSubnetCall) Do(f func(context.Context, string, client.GetSubnetOpts) (*client.Subnet, error)) *MockNetworkingClientGetSubnetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockNetworkingClientGetSubnetCall) DoAndReturn(f func(string, client.GetSubnetOpts) (*client.Subnet, error)) *MockNetworkingClientGetSubnetCall {
+func (c *MockNetworkingClientGetSubnetCall) DoAndReturn(f func(context.Context, string, client.GetSubnetOpts) (*client.Subnet, error)) *MockNetworkingClientGetSubnetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // ReserveIPs mocks base method.
-func (m *MockNetworkingClient) ReserveIPs(reserveType client.IPReservationTypeFunc, subnet string, opts client.ReserveIPOpts) ([]netip.Addr, error) {
+func (m *MockNetworkingClient) ReserveIPs(ctx context.Context, reserveType client.IPReservationTypeFunc, subnet string, opts client.ReserveIPOpts) ([]netip.Addr, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReserveIPs", reserveType, subnet, opts)
+	ret := m.ctrl.Call(m, "ReserveIPs", ctx, reserveType, subnet, opts)
 	ret0, _ := ret[0].([]netip.Addr)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ReserveIPs indicates an expected call of ReserveIPs.
-func (mr *MockNetworkingClientMockRecorder) ReserveIPs(reserveType, subnet, opts any) *MockNetworkingClientReserveIPsCall {
+func (mr *MockNetworkingClientMockRecorder) ReserveIPs(ctx, reserveType, subnet, opts any) *MockNetworkingClientReserveIPsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReserveIPs", reflect.TypeOf((*MockNetworkingClient)(nil).ReserveIPs), reserveType, subnet, opts)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReserveIPs", reflect.TypeOf((*MockNetworkingClient)(nil).ReserveIPs), ctx, reserveType, subnet, opts)
 	return &MockNetworkingClientReserveIPsCall{Call: call}
 }
 
@@ -377,29 +378,29 @@ func (c *MockNetworkingClientReserveIPsCall) Return(arg0 []netip.Addr, arg1 erro
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockNetworkingClientReserveIPsCall) Do(f func(client.IPReservationTypeFunc, string, client.ReserveIPOpts) ([]netip.Addr, error)) *MockNetworkingClientReserveIPsCall {
+func (c *MockNetworkingClientReserveIPsCall) Do(f func(context.Context, client.IPReservationTypeFunc, string, client.ReserveIPOpts) ([]netip.Addr, error)) *MockNetworkingClientReserveIPsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockNetworkingClientReserveIPsCall) DoAndReturn(f func(client.IPReservationTypeFunc, string, client.ReserveIPOpts) ([]netip.Addr, error)) *MockNetworkingClientReserveIPsCall {
+func (c *MockNetworkingClientReserveIPsCall) DoAndReturn(f func(context.Context, client.IPReservationTypeFunc, string, client.ReserveIPOpts) ([]netip.Addr, error)) *MockNetworkingClientReserveIPsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // UnreserveIPs mocks base method.
-func (m *MockNetworkingClient) UnreserveIPs(unreserveType client.IPUnreservationTypeFunc, subnet string, opts client.UnreserveIPOpts) error {
+func (m *MockNetworkingClient) UnreserveIPs(ctx context.Context, unreserveType client.IPUnreservationTypeFunc, subnet string, opts client.UnreserveIPOpts) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UnreserveIPs", unreserveType, subnet, opts)
+	ret := m.ctrl.Call(m, "UnreserveIPs", ctx, unreserveType, subnet, opts)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UnreserveIPs indicates an expected call of UnreserveIPs.
-func (mr *MockNetworkingClientMockRecorder) UnreserveIPs(unreserveType, subnet, opts any) *MockNetworkingClientUnreserveIPsCall {
+func (mr *MockNetworkingClientMockRecorder) UnreserveIPs(ctx, unreserveType, subnet, opts any) *MockNetworkingClientUnreserveIPsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnreserveIPs", reflect.TypeOf((*MockNetworkingClient)(nil).UnreserveIPs), unreserveType, subnet, opts)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnreserveIPs", reflect.TypeOf((*MockNetworkingClient)(nil).UnreserveIPs), ctx, unreserveType, subnet, opts)
 	return &MockNetworkingClientUnreserveIPsCall{Call: call}
 }
 
@@ -415,13 +416,13 @@ func (c *MockNetworkingClientUnreserveIPsCall) Return(arg0 error) *MockNetworkin
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockNetworkingClientUnreserveIPsCall) Do(f func(client.IPUnreservationTypeFunc, string, client.UnreserveIPOpts) error) *MockNetworkingClientUnreserveIPsCall {
+func (c *MockNetworkingClientUnreserveIPsCall) Do(f func(context.Context, client.IPUnreservationTypeFunc, string, client.UnreserveIPOpts) error) *MockNetworkingClientUnreserveIPsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockNetworkingClientUnreserveIPsCall) DoAndReturn(f func(client.IPUnreservationTypeFunc, string, client.UnreserveIPOpts) error) *MockNetworkingClientUnreserveIPsCall {
+func (c *MockNetworkingClientUnreserveIPsCall) DoAndReturn(f func(context.Context, client.IPUnreservationTypeFunc, string, client.UnreserveIPOpts) error) *MockNetworkingClientUnreserveIPsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
