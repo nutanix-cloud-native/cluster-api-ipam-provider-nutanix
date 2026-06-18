@@ -15,7 +15,6 @@ import (
 	networkingapi "github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4/models/networking/v4/config"
 	networkingprismapi "github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4/models/prism/v4/config"
 	"go4.org/netipx"
-	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/utils/ptr"
 
 	"github.com/nutanix-cloud-native/prism-go-client/utils"
@@ -421,25 +420,12 @@ func (n *networkingClient) GetSubnet(
 	subnetExtIDOrName string,
 	opts GetSubnetOpts,
 ) (*Subnet, error) {
-	var errs []error
-
 	subnetUUID, err := uuid.Parse(subnetExtIDOrName)
 	if err == nil {
-		subnet, errByExtID := n.getSubnetByExtID(subnetUUID)
-		if errByExtID == nil {
-			return subnet, nil
-		}
-		errs = append(errs, errByExtID)
+		return n.getSubnetByExtID(subnetUUID)
 	}
 
-	subnet, errByName := n.getSubnetByName(subnetExtIDOrName, opts)
-	if errByName != nil {
-		errs = append(errs, errByName)
-		aggErr := kerrors.NewAggregate(errs)
-		return nil, fmt.Errorf("failed to get subnet %q: %w", subnetExtIDOrName, aggErr)
-	}
-
-	return subnet, nil
+	return n.getSubnetByName(subnetExtIDOrName, opts)
 }
 
 func (n *networkingClient) getSubnetByName(subnetName string, opts GetSubnetOpts) (*Subnet, error) {
