@@ -1,0 +1,57 @@
+# Copyright 2026 Nutanix. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+managementClusterName: caipamx-e2e
+
+providers:
+- name: cluster-api
+  type: CoreProvider
+  versions:
+  - name: "${CAPI_VERSION}"
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/${CAPI_VERSION}/core-components.yaml"
+    type: url
+    contract: v1beta2
+
+- name: kubeadm
+  type: BootstrapProvider
+  versions:
+  - name: "${CAPI_VERSION}"
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/${CAPI_VERSION}/bootstrap-components.yaml"
+    type: url
+    contract: v1beta2
+
+- name: kubeadm
+  type: ControlPlaneProvider
+  versions:
+  - name: "${CAPI_VERSION}"
+    value: "https://github.com/kubernetes-sigs/cluster-api/releases/download/${CAPI_VERSION}/control-plane-components.yaml"
+    type: url
+    contract: v1beta2
+
+- name: nutanix
+  type: IPAMProvider
+  versions:
+  - name: "${E2E_PROVIDER_VERSION}"
+    value: "${E2E_IPAM_COMPONENTS}"
+    type: url
+    contract: v1beta2
+    files:
+    - sourcePath: "../data/ipam/metadata.yaml"
+      targetName: metadata.yaml
+
+variables:
+  # To run Nutanix provider tests, set following variables here or as env vars.
+  # IP/FQDN of Prism Central.
+  NUTANIX_ENDPOINT: "${NUTANIX_ENDPOINT}"
+  # Port of Prism Central. Default: 9440.
+  NUTANIX_PORT: "9440"
+  # Prism Central user.
+  NUTANIX_USER: "${NUTANIX_USERNAME}"
+  # Prism Central password.
+  NUTANIX_PASSWORD: "${NUTANIX_PASSWORD}"
+  # Prism Central TLS verification mode.
+  NUTANIX_INSECURE: "false"
+  # Name of the subnet to reserve IPs from.
+  NUTANIX_SUBNET: "${NUTANIX_SUBNET}"
+  # Name of the Prism Element cluster hosting the subnet.
+  NUTANIX_CLUSTER: "${NUTANIX_CLUSTER}"

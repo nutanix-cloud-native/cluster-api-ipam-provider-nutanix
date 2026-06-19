@@ -1,7 +1,7 @@
 # Copyright 2024 Nutanix. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-GORELEASER_PARALLELISM ?= $(shell nproc --ignore=1)
+GORELEASER_PARALLELISM ?= $(AVAILABLE_PARALLELISM)
 GORELEASER_VERBOSE ?= false
 
 ifndef GORELEASER_CURRENT_TAG
