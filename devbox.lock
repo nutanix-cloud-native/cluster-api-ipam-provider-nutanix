@@ -98,50 +98,50 @@
       }
     },
     "clusterctl@latest": {
-      "last_modified": "2025-02-20T02:45:56Z",
-      "resolved": "github:NixOS/nixpkgs/dad564433178067be1fbdfcce23b546254b6d641#clusterctl",
+      "last_modified": "2026-05-21T08:15:18Z",
+      "resolved": "github:NixOS/nixpkgs/4a29d733e8a7d5b824c3d8c958a946a9867b3eb2#clusterctl",
       "source": "devbox-search",
-      "version": "1.9.5",
+      "version": "1.12.2",
       "systems": {
         "aarch64-darwin": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/z2bfiacgkwgdnh4wzz6nj8jlbm0c6g1f-clusterctl-1.9.5",
+              "path": "/nix/store/s80dg7ry7w6964za80hnc1iyn9cfai6i-clusterctl-1.12.2",
               "default": true
             }
           ],
-          "store_path": "/nix/store/z2bfiacgkwgdnh4wzz6nj8jlbm0c6g1f-clusterctl-1.9.5"
+          "store_path": "/nix/store/s80dg7ry7w6964za80hnc1iyn9cfai6i-clusterctl-1.12.2"
         },
         "aarch64-linux": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/wd5djgad2qi16kmzklpxhmahyxghqyvf-clusterctl-1.9.5",
+              "path": "/nix/store/0p6aypqp485wzp0s54jj5fyyhs6q1cqs-clusterctl-1.12.2",
               "default": true
             }
           ],
-          "store_path": "/nix/store/wd5djgad2qi16kmzklpxhmahyxghqyvf-clusterctl-1.9.5"
+          "store_path": "/nix/store/0p6aypqp485wzp0s54jj5fyyhs6q1cqs-clusterctl-1.12.2"
         },
         "x86_64-darwin": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/d7215qdw9q0r08bv5ndsv5sfci1aidvy-clusterctl-1.9.5",
+              "path": "/nix/store/77nz98yp1yzaf9sb7kbggpv1ngq28hxd-clusterctl-1.12.2",
               "default": true
             }
           ],
-          "store_path": "/nix/store/d7215qdw9q0r08bv5ndsv5sfci1aidvy-clusterctl-1.9.5"
+          "store_path": "/nix/store/77nz98yp1yzaf9sb7kbggpv1ngq28hxd-clusterctl-1.12.2"
         },
         "x86_64-linux": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/s3fsmnxsiz1gv5gk81igbw46ijkidv43-clusterctl-1.9.5",
+              "path": "/nix/store/ifkfv2fsmqq4fildxkdq48qj6p8yjxxk-clusterctl-1.12.2",
               "default": true
             }
           ],
-          "store_path": "/nix/store/s3fsmnxsiz1gv5gk81igbw46ijkidv43-clusterctl-1.9.5"
+          "store_path": "/nix/store/ifkfv2fsmqq4fildxkdq48qj6p8yjxxk-clusterctl-1.12.2"
         }
       }
     },
