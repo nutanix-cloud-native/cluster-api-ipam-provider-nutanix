@@ -5,17 +5,14 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/netip"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go4.org/netipx"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
 )
@@ -42,11 +39,6 @@ func reserveCmd() *cobra.Command {
 				return fmt.Errorf("failed to create Prism Central client: %w", err)
 			}
 
-			requestID, err := uuid.NewV7()
-			if err != nil {
-				return fmt.Errorf("failed to generate request ID: %w", err)
-			}
-
 			var reserveType client.IPReservationTypeFunc
 
 			switch {
@@ -70,39 +62,21 @@ func reserveCmd() *cobra.Command {
 				aosCluster = viper.GetString("cluster")
 			}
 
-			var ips []netip.Addr
+			// ReserveIPs blocks until the underlying Prism task completes; bound
+			// the wait so the command does not hang indefinitely.
+			ctx, cancel := context.WithTimeout(cmd.Context(), time.Minute)
+			defer cancel()
 
-			err = wait.PollUntilContextTimeout(
-				cmd.Context(),
-				time.Second,
-				time.Minute,
-				true,
-				func(ctx context.Context) (bool, error) {
-					var err error
-					ips, err = pcClient.Networking().ReserveIPs(
-						ctx,
-						reserveType,
-						subnet,
-						client.ReserveIPOpts{
-							AsyncTaskOpts: client.AsyncTaskOpts{
-								RequestID: requestID.String(),
-							},
-							Cluster: aosCluster,
-						},
-					)
-					if err != nil {
-						if errors.Is(err, client.ErrTaskOngoing) {
-							return false, nil
-						}
-
-						return false, fmt.Errorf("failed to reserve IP: %w", err)
-					}
-
-					return true, nil
+			ips, err := pcClient.Networking().ReserveIPs(
+				ctx,
+				reserveType,
+				subnet,
+				client.ReserveIPOpts{
+					Cluster: aosCluster,
 				},
 			)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to reserve IP: %w", err)
 			}
 
 			// The ReserveIP API call returns each IP address that has been reserved. Using an IPSet allows us to display the

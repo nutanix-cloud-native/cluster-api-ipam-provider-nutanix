@@ -8,22 +8,19 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/spf13/pflag"
 	"golang.org/x/time/rate"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/cluster-api-ipam-provider-in-cluster/pkg/ipamutil"
 	ipampredicates "sigs.k8s.io/cluster-api-ipam-provider-in-cluster/pkg/predicates"
-	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
+	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -39,11 +36,6 @@ import (
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha1"
 	pcclient "github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/index"
-)
-
-const (
-	reserveIPRequestIDAnnotationKey   = "ipam.cluster.x-k8s.io/ntnx-reserve-ip-request-id"
-	unreserveIPRequestIDAnnotationKey = "ipam.cluster.x-k8s.io/ntnx-unreserve-ip-request-id"
 )
 
 type genericNutanixIPPool interface {
@@ -151,13 +143,15 @@ func (i *NutanixProviderAdapter) SetupWithManager(_ context.Context, b *ctrl.Bui
 		WithOptions(
 			controller.Options{
 				MaxConcurrentReconciles: i.opts.maxConcurrentReconciles,
-				RateLimiter: workqueue.NewMaxOfRateLimiter(
-					workqueue.NewItemExponentialFailureRateLimiter(
+				RateLimiter: workqueue.NewTypedMaxOfRateLimiter(
+					workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](
 						i.opts.minRequeueTime,
 						i.opts.maxRequeueTime,
 					),
 					// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
-					&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+					&workqueue.TypedBucketRateLimiter[reconcile.Request]{
+						Limiter: rate.NewLimiter(rate.Limit(10), 100),
+					},
 				),
 			},
 		)
@@ -172,10 +166,10 @@ func (i *NutanixProviderAdapter) ipPoolToIPClaims(
 		claims := &ipamv1.IPAddressClaimList{}
 		err := i.k8sClient.List(ctx, claims,
 			ctrlclient.MatchingFields{
-				"index.poolRef": index.IPPoolRefValue(corev1.TypedLocalObjectReference{
+				"index.poolRef": index.IPPoolRefValue(ipamv1.IPPoolReference{
 					Name:     pool.GetName(),
 					Kind:     kind,
-					APIGroup: &v1alpha1.GroupVersion.Group,
+					APIGroup: v1alpha1.GroupVersion.Group,
 				}),
 			},
 			ctrlclient.InNamespace(pool.GetNamespace()),
@@ -250,58 +244,37 @@ func (h *IPAddressClaimHandler) EnsureAddress(
 		return nil, fmt.Errorf("failed to check for existing IPAddress: %w", err)
 	}
 
-	reqID, err := ensureRequestIDAnnotation(ctx, h.claim, reserveIPRequestIDAnnotationKey, h.client)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to patch IPAddressClaim to add reserve IP request ID annotation: %w",
-			err,
-		)
-	}
-
 	nutanixClient, err := h.getClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Nutanix client: %w", err)
 	}
+	cluster := ptr.Deref(h.pool.PoolSpec().Cluster, "")
+	subnet, err := nutanixClient.Networking().GetSubnet(
+		ctx,
+		h.pool.PoolSpec().Subnet,
+		pcclient.GetSubnetOpts{Cluster: cluster},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subnet: %w", err)
+	}
 
-	// Now actually reserve the IP address.
+	// Reserve the IP address. This blocks until the underlying Prism task
+	// completes and returns the reserved IPs.
 	reservedIPs, err := nutanixClient.Networking().ReserveIPs(
 		ctx,
 		pcclient.ReserveIPCountFunc(1),
 		h.pool.PoolSpec().Subnet,
 		pcclient.ReserveIPOpts{
-			Cluster: ptr.Deref(h.pool.PoolSpec().Cluster, ""),
-			AsyncTaskOpts: pcclient.AsyncTaskOpts{
-				RequestID: reqID,
-			},
+			Cluster:       cluster,
 			ClientContext: string(h.claim.UID),
 		},
 	)
 	if err != nil {
-		err = fmt.Errorf("failed to reserve IP: %w", err)
-
-		switch {
-		case errors.Is(err, pcclient.ErrTaskOngoing):
-			return nil, fmt.Errorf("requeuing to wait for task completion: %w", err)
-		default:
-			if clearReqIDErr := clearRequestIDAnnotation(
-				ctx, h.claim, reserveIPRequestIDAnnotationKey, h.client,
-			); clearReqIDErr != nil {
-				err = kerrors.NewAggregate(
-					append(
-						[]error{err},
-						fmt.Errorf(
-							"failed to patch IPAddressClaim to delete reserve IP request ID annotation: %w",
-							clearReqIDErr,
-						),
-					),
-				)
-			}
-		}
-
-		return nil, err
+		return nil, fmt.Errorf("failed to reserve IP: %w", err)
 	}
 
 	address.Spec.Address = reservedIPs[0].String()
+	address.Spec.Prefix = ptr.To(subnet.Prefix())
 
 	return nil, nil
 }
@@ -325,58 +298,22 @@ func (h *IPAddressClaimHandler) ReleaseAddress(ctx context.Context) (*ctrl.Resul
 		return nil, fmt.Errorf("failed to get IPAddress: %w", err)
 	}
 
-	reqID, err := ensureRequestIDAnnotation(
-		ctx,
-		h.claim,
-		unreserveIPRequestIDAnnotationKey,
-		h.client,
-	)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to patch IPAddressClaim to add unreserve IP request ID annotation: %w",
-			err,
-		)
-	}
-
 	nutanixClient, err := h.getClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Nutanix client: %w", err)
 	}
 
-	err = nutanixClient.Networking().UnreserveIPs(
+	// Unreserve the IP address. This blocks until the underlying Prism task
+	// completes and is idempotent if the IP was already released.
+	if err := nutanixClient.Networking().UnreserveIPs(
 		ctx,
 		pcclient.UnreserveIPClientContext(string(h.claim.UID)),
 		h.pool.PoolSpec().Subnet,
 		pcclient.UnreserveIPOpts{
 			Cluster: ptr.Deref(h.pool.PoolSpec().Cluster, ""),
-			AsyncTaskOpts: pcclient.AsyncTaskOpts{
-				RequestID: reqID,
-			},
 		},
-	)
-	if err != nil {
-		err = fmt.Errorf("failed to unreserve IP: %w", err)
-
-		switch {
-		case errors.Is(err, pcclient.ErrTaskOngoing):
-			return nil, fmt.Errorf("requeuing to wait for task completion: %w", err)
-		default:
-			if clearReqIDErr := clearRequestIDAnnotation(
-				ctx, h.claim, unreserveIPRequestIDAnnotationKey, h.client,
-			); clearReqIDErr != nil {
-				err = kerrors.NewAggregate(
-					append(
-						[]error{err},
-						fmt.Errorf(
-							"failed to patch IPAddressClaim to delete unreserve IP request ID annotation: %w",
-							clearReqIDErr,
-						),
-					),
-				)
-			}
-		}
-
-		return nil, err
+	); err != nil {
+		return nil, fmt.Errorf("failed to unreserve IP: %w", err)
 	}
 
 	return nil, nil
@@ -449,60 +386,4 @@ func (h *IPAddressClaimHandler) getClient() (pcclient.Client, error) {
 	}
 
 	return c, nil
-}
-
-func ensureRequestIDAnnotation(
-	ctx context.Context,
-	obj ctrlclient.Object,
-	requestAnnotationKey string,
-	cl ctrlclient.Client,
-) (string, error) {
-	// If the claim does not have a request ID annotation set, then we set one
-	// here. This is used so we can send the same reservation request and receive the same task ID back.
-	reqID, found := obj.GetAnnotations()[requestAnnotationKey]
-	if !found {
-		claimPatch := ctrlclient.MergeFrom(obj.DeepCopyObject().(ctrlclient.Object))
-
-		reqUUID, err := uuid.NewV7()
-		if err != nil {
-			return "", fmt.Errorf("failed to generate request UUID: %w", err)
-		}
-
-		reqID = reqUUID.String()
-
-		if obj.GetAnnotations() == nil {
-			obj.SetAnnotations(make(map[string]string, 1))
-		}
-
-		obj.GetAnnotations()[requestAnnotationKey] = reqID
-
-		if err := cl.Patch(ctx, obj, claimPatch); err != nil {
-			return "", fmt.Errorf(
-				"failed to patch object with request ID annotation %q: %w",
-				requestAnnotationKey, err,
-			)
-		}
-	}
-
-	return reqID, nil
-}
-
-func clearRequestIDAnnotation(ctx context.Context,
-	obj ctrlclient.Object,
-	requestAnnotationKey string,
-	cl ctrlclient.Client,
-) error {
-	objPatch := ctrlclient.MergeFrom(obj.DeepCopyObject().(ctrlclient.Object))
-
-	delete(obj.GetAnnotations(), requestAnnotationKey)
-
-	if err := cl.Patch(ctx, obj, objPatch); err != nil {
-		return fmt.Errorf(
-			"failed to patch object with request ID annotation %q: %w",
-			requestAnnotationKey,
-			err,
-		)
-	}
-
-	return nil
 }

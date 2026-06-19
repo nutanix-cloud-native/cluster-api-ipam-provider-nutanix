@@ -25,7 +25,6 @@ func GetClient(params CachedClientParams) (Client, error) {
 
 type Client interface {
 	Networking() NetworkingClient
-	Prism() PrismClient
 	Cluster() ClusterClient
 }
 

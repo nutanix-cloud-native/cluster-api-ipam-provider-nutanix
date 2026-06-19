@@ -5,15 +5,12 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
 )
@@ -52,46 +49,28 @@ func unreserveCmd() *cobra.Command {
 				return fmt.Errorf("failed to create unreserve IP request: %w", err)
 			}
 
-			requestID, err := uuid.NewV7()
-			if err != nil {
-				return fmt.Errorf("failed to generate request ID: %w", err)
-			}
-
 			aosCluster := viper.GetString("aos-cluster")
 			if aosCluster == "" {
 				aosCluster = viper.GetString("cluster")
 			}
 
-			err = wait.PollUntilContextTimeout(
-				cmd.Context(),
-				time.Second,
-				time.Minute,
-				true,
-				func(ctx context.Context) (bool, error) {
-					err := pcClient.Networking().UnreserveIPs(
-						ctx,
-						unreserveType,
-						viper.GetString("subnet"),
-						client.UnreserveIPOpts{
-							AsyncTaskOpts: client.AsyncTaskOpts{
-								RequestID: requestID.String(),
-							},
-							Cluster: aosCluster,
-						},
-					)
-					if err != nil {
-						if errors.Is(err, client.ErrTaskOngoing) {
-							return false, nil
-						}
+			// UnreserveIPs blocks until the underlying Prism task completes; bound
+			// the wait so the command does not hang indefinitely.
+			ctx, cancel := context.WithTimeout(cmd.Context(), time.Minute)
+			defer cancel()
 
-						return false, fmt.Errorf("failed to unreserve IP: %w", err)
-					}
-
-					return true, nil
+			if err := pcClient.Networking().UnreserveIPs(
+				ctx,
+				unreserveType,
+				viper.GetString("subnet"),
+				client.UnreserveIPOpts{
+					Cluster: aosCluster,
 				},
-			)
+			); err != nil {
+				return fmt.Errorf("failed to unreserve IP: %w", err)
+			}
 
-			return err
+			return nil
 		},
 	}
 
