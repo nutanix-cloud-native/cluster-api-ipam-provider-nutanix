@@ -9,7 +9,7 @@ toolchain go1.26.3
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/nutanix-cloud-native/prism-go-client v0.7.4-0.20260619160151-9f96e323fbb9
+	github.com/nutanix-cloud-native/prism-go-client v0.7.4-0.20260620224143-0c80364bbb5f
 	github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4 v4.2.1
 	github.com/onsi/ginkgo/v2 v2.31.0
 	github.com/onsi/gomega v1.40.0

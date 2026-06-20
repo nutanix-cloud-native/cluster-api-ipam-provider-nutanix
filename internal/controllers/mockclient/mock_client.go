@@ -288,11 +288,12 @@ func (c *MockNetworkingClientReserveIPsCall) DoAndReturn(f func(context.Context,
 }
 
 // UnreserveIPs mocks base method.
-func (m *MockNetworkingClient) UnreserveIPs(ctx context.Context, unreserveType client.IPUnreservationTypeFunc, subnet string, opts client.UnreserveIPOpts) error {
+func (m *MockNetworkingClient) UnreserveIPs(ctx context.Context, unreserveType client.IPUnreservationTypeFunc, subnet string, opts client.UnreserveIPOpts) ([]netip.Addr, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UnreserveIPs", ctx, unreserveType, subnet, opts)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].([]netip.Addr)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // UnreserveIPs indicates an expected call of UnreserveIPs.
@@ -308,19 +309,19 @@ type MockNetworkingClientUnreserveIPsCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockNetworkingClientUnreserveIPsCall) Return(arg0 error) *MockNetworkingClientUnreserveIPsCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockNetworkingClientUnreserveIPsCall) Return(arg0 []netip.Addr, arg1 error) *MockNetworkingClientUnreserveIPsCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockNetworkingClientUnreserveIPsCall) Do(f func(context.Context, client.IPUnreservationTypeFunc, string, client.UnreserveIPOpts) error) *MockNetworkingClientUnreserveIPsCall {
+func (c *MockNetworkingClientUnreserveIPsCall) Do(f func(context.Context, client.IPUnreservationTypeFunc, string, client.UnreserveIPOpts) ([]netip.Addr, error)) *MockNetworkingClientUnreserveIPsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockNetworkingClientUnreserveIPsCall) DoAndReturn(f func(context.Context, client.IPUnreservationTypeFunc, string, client.UnreserveIPOpts) error) *MockNetworkingClientUnreserveIPsCall {
+func (c *MockNetworkingClientUnreserveIPsCall) DoAndReturn(f func(context.Context, client.IPUnreservationTypeFunc, string, client.UnreserveIPOpts) ([]netip.Addr, error)) *MockNetworkingClientUnreserveIPsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -138,7 +138,7 @@ type NetworkingClient interface {
 		unreserveType IPUnreservationTypeFunc,
 		subnet string,
 		opts UnreserveIPOpts,
-	) error
+	) ([]netip.Addr, error)
 	GetSubnet(ctx context.Context, subnet string, opts GetSubnetOpts) (*Subnet, error)
 }
 
@@ -298,31 +298,43 @@ type UnreserveIPOpts struct {
 
 func (n *networkingClient) UnreserveIPs(
 	ctx context.Context, unreserveType IPUnreservationTypeFunc, subnet string, opts UnreserveIPOpts,
-) error {
+) ([]netip.Addr, error) {
 	apiSubnet, err := n.GetSubnet(ctx, subnet, GetSubnetOpts{Cluster: opts.Cluster})
 	if err != nil {
-		return fmt.Errorf("failed to get subnet %s: %w", subnet, err)
+		return nil, fmt.Errorf("failed to get subnet %s: %w", subnet, err)
 	}
 
 	unreservation := internalUnreserveSpec{}
 	unreserveType(&unreservation)
 
-	// UnreserveIpsBySubnetId submits the unreservation task and blocks until it
-	// completes.
-	if err := n.v4Client.Subnets.UnreserveIpsBySubnetId(
+	// UnreserveIpsBySubnetId submits the unreservation task, blocks until it
+	// completes, and returns the IPs the server released. This is useful when
+	// unreserving by client context, where the caller does not know up front
+	// which IPs will be released.
+	unreservedIPs, err := n.v4Client.Subnets.UnreserveIpsBySubnetId(
 		ctx,
 		apiSubnet.ExtID().String(),
 		&unreservation.IpUnreserveSpec,
-	); err != nil {
+	)
+	if err != nil {
 		// Unreserving an IP that was never reserved (or already released) is
 		// not an error from our perspective; the desired end state is reached.
 		if unreservationAlreadyReleased(err) {
-			return nil
+			return nil, nil
 		}
-		return fmt.Errorf("failed to unreserve IP in subnet %s: %w", subnet, err)
+		return nil, fmt.Errorf("failed to unreserve IP in subnet %s: %w", subnet, err)
 	}
 
-	return nil
+	ips := make([]netip.Addr, 0, len(unreservedIPs))
+	for _, ip := range unreservedIPs {
+		addr, err := netip.ParseAddr(ip)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse unreserved IP %q: %w", ip, err)
+		}
+		ips = append(ips, addr)
+	}
+
+	return ips, nil
 }
 
 func unreservationAlreadyReleased(err error) bool {

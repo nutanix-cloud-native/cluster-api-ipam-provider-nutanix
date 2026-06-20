@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -303,18 +304,28 @@ func (h *IPAddressClaimHandler) ReleaseAddress(ctx context.Context) (*ctrl.Resul
 		return nil, fmt.Errorf("failed to get Nutanix client: %w", err)
 	}
 
-	// Unreserve the IP address. This blocks until the underlying Prism task
-	// completes and is idempotent if the IP was already released.
-	if err := nutanixClient.Networking().UnreserveIPs(
+	// Unreserve the IP address by client context. This blocks until the
+	// underlying Prism task completes and is idempotent if the IP was already
+	// released. Unreserving by context means the server resolves and releases
+	// the IPs, so the returned list is the authoritative record of what was
+	// freed.
+	unreservedIPs, err := nutanixClient.Networking().UnreserveIPs(
 		ctx,
 		pcclient.UnreserveIPClientContext(string(h.claim.UID)),
 		h.pool.PoolSpec().Subnet,
 		pcclient.UnreserveIPOpts{
 			Cluster: ptr.Deref(h.pool.PoolSpec().Cluster, ""),
 		},
-	); err != nil {
+	)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unreserve IP: %w", err)
 	}
+
+	log.FromContext(ctx).V(1).Info(
+		"Unreserved IP addresses by client context",
+		"clientContext", string(h.claim.UID),
+		"unreservedIPs", unreservedIPs,
+	)
 
 	return nil, nil
 }

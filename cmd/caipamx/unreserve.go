@@ -59,15 +59,20 @@ func unreserveCmd() *cobra.Command {
 			ctx, cancel := context.WithTimeout(cmd.Context(), time.Minute)
 			defer cancel()
 
-			if err := pcClient.Networking().UnreserveIPs(
+			unreservedIPs, err := pcClient.Networking().UnreserveIPs(
 				ctx,
 				unreserveType,
 				viper.GetString("subnet"),
 				client.UnreserveIPOpts{
 					Cluster: aosCluster,
 				},
-			); err != nil {
+			)
+			if err != nil {
 				return fmt.Errorf("failed to unreserve IP: %w", err)
+			}
+
+			for _, ip := range unreservedIPs {
+				fmt.Println(ip)
 			}
 
 			return nil

@@ -171,7 +171,7 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 						gomock.Any(),
 						pool.Spec.Subnet,
 						gomock.Any(),
-					).Return(nil),
+					).Return(nil, nil),
 				)
 
 				claim := newClaim("test", namespace, v1alpha1.NutanixIPPoolKind, poolName)
@@ -267,14 +267,14 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 							gomock.Any(),
 							pool.Spec.Subnet,
 							gomock.Any(),
-						).Return(errors.New("task failed")).Call)
+						).Return(nil, errors.New("task failed")).Call)
 					}
 					expectedCalls = append(expectedCalls, mockNC.EXPECT().UnreserveIPs(
 						gomock.Any(),
 						gomock.Any(),
 						pool.Spec.Subnet,
 						gomock.Any(),
-					).Return(nil).Call)
+					).Return(nil, nil).Call)
 					gomock.InOrder(expectedCalls...)
 
 					claim := newClaim("test", namespace, v1alpha1.NutanixIPPoolKind, poolName)

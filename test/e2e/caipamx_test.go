@@ -527,7 +527,7 @@ func cleanupNutanixReservation(
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	if err := nutanixClient.Networking().UnreserveIPs(
+	if _, err := nutanixClient.Networking().UnreserveIPs(
 		ctx,
 		pcclient.UnreserveIPClientContext(clientContext),
 		cfg.Subnet,
