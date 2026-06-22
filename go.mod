@@ -12,8 +12,8 @@ require (
 	github.com/nutanix-cloud-native/prism-go-client v0.7.3
 	github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4 v4.2.1
 	github.com/nutanix/ntnx-api-golang-clients/prism-go-client/v4 v4.2.1
-	github.com/onsi/ginkgo/v2 v2.31.0
-	github.com/onsi/gomega v1.40.0
+	github.com/onsi/ginkgo/v2 v2.32.0
+	github.com/onsi/gomega v1.42.0
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.53.0
 	github.com/spf13/cobra v1.10.2
