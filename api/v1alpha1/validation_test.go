@@ -10,7 +10,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha1"
@@ -95,7 +94,7 @@ var _ = DescribeTableSubtree(
 			},
 		},
 		Subnet:  "example-subnet-name",
-		Cluster: ptr.To("example-cluster-name"),
+		Cluster: new("example-cluster-name"),
 	}, false),
 
 	Entry("failure with missing cluster and named subnet", v1alpha1.NutanixIPPoolSpec{
@@ -124,7 +123,7 @@ var _ = DescribeTableSubtree(
 			},
 		},
 		Subnet:  "example-subnet-name",
-		Cluster: ptr.To("example-cluster-name"),
+		Cluster: new("example-cluster-name"),
 	}, true),
 
 	Entry("success with only data additionalTrustBundle set", v1alpha1.NutanixIPPoolSpec{
@@ -139,7 +138,7 @@ var _ = DescribeTableSubtree(
 			},
 		},
 		Subnet:  "example-subnet-name",
-		Cluster: ptr.To("example-cluster-name"),
+		Cluster: new("example-cluster-name"),
 	}, false),
 
 	Entry("success with only configmap ref additionalTrustBundle set", v1alpha1.NutanixIPPoolSpec{
@@ -156,7 +155,7 @@ var _ = DescribeTableSubtree(
 			},
 		},
 		Subnet:  "example-subnet-name",
-		Cluster: ptr.To("example-cluster-name"),
+		Cluster: new("example-cluster-name"),
 	}, false),
 
 	Entry(
@@ -171,7 +170,7 @@ var _ = DescribeTableSubtree(
 				AdditionalTrustBundle: &v1alpha1.AdditionalTrustBundle{},
 			},
 			Subnet:  "example-subnet-name",
-			Cluster: ptr.To("example-cluster-name"),
+			Cluster: new("example-cluster-name"),
 		},
 		true,
 	),

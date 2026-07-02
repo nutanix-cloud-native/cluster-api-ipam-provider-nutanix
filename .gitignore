@@ -44,3 +44,4 @@ node_modules/
 /ipam-components.yaml
 /_artifacts/
 /release-metadata.yaml
+/test/e2e/config/*-envsubst.yaml

@@ -23,9 +23,9 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/log"
-	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/kubeconfig"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -315,6 +315,7 @@ func (e *Environment) PatchAndWait(
 	// Store old resource version, empty string if not found.
 	oldResourceVersion := objCopy.GetResourceVersion()
 
+	//nolint:staticcheck // This generic test helper accepts client.Object; Client.Apply requires apply configurations.
 	if err := e.Client.Patch(ctx, obj, client.Apply, opts...); err != nil {
 		return err
 	}

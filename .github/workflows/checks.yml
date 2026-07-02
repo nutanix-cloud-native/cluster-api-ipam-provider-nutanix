@@ -12,12 +12,20 @@ on:
       - opened
       - synchronize
       - reopened
+      - labeled
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
   merge_group:
     types:
       - checks_requested
 
 permissions:
   contents: read
+  pull-requests: read
 
 defaults:
   run:
@@ -27,7 +35,29 @@ env:
   GH_TOKEN: ${{ github.token }}
 
 jobs:
+  check_approvals:
+    runs-on: ubuntu-22.04
+    # Run this job only if:
+    # 1. The PR has opted into e2e with the integration-test label.
+    # 2. A label event added integration-test, not an unrelated label.
+    # 3. The event is either:
+    #    a. pull_request for an internal PR.
+    #    b. pull_request_target for an external PR.
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'integration-test') &&
+      (github.event.action != 'labeled' || github.event.label.name == 'integration-test') &&
+      ((github.event_name == 'pull_request' && github.event.pull_request.base.repo.clone_url == github.event.pull_request.head.repo.clone_url) ||
+      (github.event_name == 'pull_request_target' && github.event.pull_request.base.repo.clone_url != github.event.pull_request.head.repo.clone_url)) }}
+    outputs:
+      check_approvals: ${{ github.event_name == 'pull_request_target' && steps.check_approvals.outputs.check_approvals || 'true' }}
+      external_pr: ${{ github.event.pull_request.base.repo.clone_url != github.event.pull_request.head.repo.clone_url }}
+    steps:
+      - name: Check integration test allowance status
+        if: ${{ github.event_name == 'pull_request_target' }}
+        id: check_approvals
+        uses: nutanix-cloud-native/action-check-approvals@v1
+
   unit-test:
+    if: github.event_name != 'pull_request_target' && github.event.action != 'labeled'
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
@@ -57,7 +87,64 @@ jobs:
         with:
           test-results: test.json
 
+  e2e-test:
+    # Nutanix e2e requires private infrastructure and secrets. PRs must opt in with the
+    # integration-test label, and external PRs must be approved first.
+    if: ${{ (github.event_name == 'pull_request' && needs.check_approvals.outputs.external_pr == 'false') ||
+      (github.event_name == 'pull_request_target' && needs.check_approvals.outputs.external_pr == 'true' && needs.check_approvals.outputs.check_approvals == 'true') }}
+    needs: check_approvals
+    runs-on: self-hosted-nutanix-docker-medium
+    env:
+      E2E_REQUIRE_NUTANIX_ENV: "true"
+      LOCAL_IMAGE_REGISTRY: ${{ vars.LOCAL_IMAGE_REGISTRY }}
+      LOCAL_IMAGE_REGISTRY_PASSWORD: ${{ secrets.LOCAL_IMAGE_REGISTRY_PASSWORD }}
+      LOCAL_IMAGE_REGISTRY_USERNAME: ${{ secrets.LOCAL_IMAGE_REGISTRY_USERNAME }}
+      NUTANIX_CLUSTER: ${{ vars.NUTANIX_CLUSTER }}
+      NUTANIX_ENDPOINT: ${{ vars.NUTANIX_ENDPOINT }}
+      NUTANIX_INSECURE: ${{ vars.NUTANIX_INSECURE }}
+      NUTANIX_PASSWORD: ${{ secrets.NUTANIX_PASSWORD }}
+      NUTANIX_SUBNET: ${{ vars.NUTANIX_SUBNET }}
+      NUTANIX_USERNAME: ${{ secrets.NUTANIX_USERNAME }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v22
+        with:
+          logger: pretty
+          extra-conf: experimental-features = ca-derivations fetch-closure
+
+      - name: Install devbox
+        uses: jetify-com/devbox-install-action@v0.15.0
+        with:
+          enable-cache: false
+          skip-nix-installation: true
+
+      - name: Export go version and mod cache path
+        id: export-go-version-and-mod-cache-path
+        run: |
+          echo go-version="$(devbox run -- go version | cut -d ' ' -f 3)" >>"${GITHUB_OUTPUT}"
+          echo mod-cache-path="$(devbox run -- go env GOMODCACHE)" >>"${GITHUB_OUTPUT}"
+
+      - name: Go cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ${{ steps.export-go-version-and-mod-cache-path.outputs.mod-cache-path }}
+          key: ${{ runner.os }}-${{ steps.export-go-version-and-mod-cache-path.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.export-go-version-and-mod-cache-path.outputs.go-version }}-
+
+      - name: Run e2e tests
+        run: devbox run -- make E2E_PARALLEL_NODES=1 e2e-test
+
   lint-go:
+    if: github.event_name != 'pull_request_target' && github.event.action != 'labeled'
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -98,6 +185,7 @@ jobs:
           golangci_lint_flags: "--config=${{ github.workspace }}/.golangci.yml"
 
   lint-gha:
+    if: github.event_name != 'pull_request_target' && github.event.action != 'labeled'
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -113,6 +201,7 @@ jobs:
           reporter: github-pr-review
 
   pre-commit:
+    if: github.event_name != 'pull_request_target' && github.event.action != 'labeled'
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code

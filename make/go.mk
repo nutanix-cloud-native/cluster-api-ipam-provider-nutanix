@@ -5,13 +5,14 @@
 # to be private (not available publicly) and should therefore not use the proxy or checksum database
 export GOPRIVATE ?=
 
-ALL_GO_SUBMODULES := $(shell find -mindepth 2 -maxdepth 2 -name go.mod -printf '%P\n' | sort)
+ALL_GO_SUBMODULES := $(shell sh -c 'for f in */go.mod; do [ -e "$$f" ] && printf "%s\n" "$$f"; done | sort')
 GO_SUBMODULES_NO_DOCS := $(filter-out $(addsuffix /go.mod,docs),$(ALL_GO_SUBMODULES))
 
 # Always ensure that GOOS and GOARCH are unset in the evironment, otherwise this can cause issues
 # with goreleaser and ko building images for the wrong platform.
 override undefine GOOS
 override undefine GOARCH
+export CGO_ENABLED := 0
 
 define go_test
 	source <(setup-envtest use -p env $(ENVTEST_VERSION)) && \
@@ -24,7 +25,6 @@ define go_test
 		-covermode=atomic \
 		-coverprofile=coverage.out \
 		-short \
-		-race \
 		-v \
 		$(if $(GOTEST_RUN),-run "$(GOTEST_RUN)") \
 		./... && \
@@ -69,28 +69,67 @@ endif
 .PHONY: bench.%
 bench.%: ## Runs go benchmarks for a specific module
 bench.%: ; $(info $(M) running benchmarks$(if $(GOTEST_RUN), matching "$(GOTEST_RUN)") for $* module)
-	$(if $(filter-out root,$*),cd $* && )go test $(if $(GOTEST_RUN),-run "$(GOTEST_RUN)") -race -cover -v ./...
+	$(if $(filter-out root,$*),cd $* && )go test $(if $(GOTEST_RUN),-run "$(GOTEST_RUN)") -cover -v ./...
 
 E2E_DRYRUN ?= false
 E2E_VERBOSE ?= $(filter $(E2E_DRYRUN),true) # If dry-run, enable verbosity
-E2E_PARALLEL_NODES ?= $(if $(filter $(E2E_DRYRUN),true),1,$(shell nproc --ignore=1)) # Ginkgo cannot dry-run in parallel
+E2E_PARALLEL_NODES ?= $(if $(filter $(E2E_DRYRUN),true),1,$(AVAILABLE_PARALLELISM)) # Ginkgo cannot dry-run in parallel
 E2E_FLAKE_ATTEMPTS ?= 1
 E2E_CONF_FILE ?= $(REPO_ROOT)/test/e2e/config/caipamx.yaml
 E2E_CONF_FILE_ENVSUBST ?= $(basename $(E2E_CONF_FILE))-envsubst.yaml
+E2E_DIR ?= $(REPO_ROOT)/.local/e2e
+# Use an unreleased semver-looking provider version for the local clusterctl repository.
+E2E_PROVIDER_VERSION ?= v0.5.99
+E2E_IPAM_COMPONENTS ?= $(E2E_DIR)/ipam-components.yaml
+E2E_IMAGE_TAG ?= e2e-$(shell git rev-parse --short HEAD)
+E2E_IMAGE_REPOSITORY ?= $(LOCAL_IMAGE_REGISTRY)/cluster-api-ipam-provider-nutanix
+E2E_IMAGE ?= $(E2E_IMAGE_REPOSITORY):$(E2E_IMAGE_TAG)
+E2E_IMAGE_REGISTRY_SERVER ?= $(shell printf '%s' '$(LOCAL_IMAGE_REGISTRY)' | cut -d/ -f1)
 export E2E_DEFAULT_KUBERNETES_VERSION ?= $(KINDEST_IMAGE_TAG)
 ARTIFACTS ?= ${REPO_ROOT}/_artifacts
+
+.PHONY: e2e-build-image
+e2e-build-image: ## Builds and pushes the e2e controller image
+	@test -n "$(LOCAL_IMAGE_REGISTRY)" || (echo "LOCAL_IMAGE_REGISTRY is required" && exit 1)
+	@test -n "$$LOCAL_IMAGE_REGISTRY_USERNAME" || (echo "LOCAL_IMAGE_REGISTRY_USERNAME is required" && exit 1)
+	@test -n "$$LOCAL_IMAGE_REGISTRY_PASSWORD" || (echo "LOCAL_IMAGE_REGISTRY_PASSWORD is required" && exit 1)
+	@mkdir -p $(E2E_DIR)
+	@echo "$$LOCAL_IMAGE_REGISTRY_PASSWORD" | docker login "$(E2E_IMAGE_REGISTRY_SERVER)" \
+	  --username "$$LOCAL_IMAGE_REGISTRY_USERNAME" \
+	  --password-stdin
+	KO_DOCKER_REPO=$(E2E_IMAGE_REPOSITORY) ko build --bare --tags $(E2E_IMAGE_TAG) ./cmd/controller
+
+.PHONY: e2e-ipam-components
+e2e-ipam-components: ## Generates local IPAM provider components for e2e
+	@test -n "$(LOCAL_IMAGE_REGISTRY)" || (echo "LOCAL_IMAGE_REGISTRY is required" && exit 1)
+	@test -n "$$LOCAL_IMAGE_REGISTRY_USERNAME" || (echo "LOCAL_IMAGE_REGISTRY_USERNAME is required" && exit 1)
+	@test -n "$$LOCAL_IMAGE_REGISTRY_PASSWORD" || (echo "LOCAL_IMAGE_REGISTRY_PASSWORD is required" && exit 1)
+	@mkdir -p $(dir $(E2E_IPAM_COMPONENTS))
+	kustomize build ./config/default | \
+	  sed 's|image: .\+$$|image: $(E2E_IMAGE)|' | \
+	  gojq --yaml-input --yaml-output \
+	    'if .kind == "Deployment" and .metadata.name == "caipamx-manager" then .spec.template.spec.imagePullSecrets = [{"name": "local-image-registry"}] else . end' \
+	    >$(E2E_IPAM_COMPONENTS)
+	printf '%s\n' '---' >>$(E2E_IPAM_COMPONENTS)
+	kubectl create secret docker-registry local-image-registry \
+	  --namespace caipamx-system \
+	  --docker-server="$(E2E_IMAGE_REGISTRY_SERVER)" \
+	  --docker-username="$$LOCAL_IMAGE_REGISTRY_USERNAME" \
+	  --docker-password="$$LOCAL_IMAGE_REGISTRY_PASSWORD" \
+	  --dry-run=client \
+	  --output=yaml >>$(E2E_IPAM_COMPONENTS)
 
 .PHONY: e2e-test
 e2e-test: ## Runs e2e tests
 ifneq ($(wildcard test/e2e/*),)
-e2e-test:
-ifneq ($(SKIP_BUILD),true)
-	$(MAKE) GORELEASER_FLAGS=$$'--config=<(env GOOS=$(shell go env GOOS) GOARCH=$(shell go env GOARCH) gojq --yaml-input --yaml-output \'del(.builds[0].goarch) | del(.builds[0].goos) | .builds[0].targets|=(["linux_amd64","linux_arm64",env.GOOS+"_"+env.GOARCH] | unique | map(. | sub("_amd64";"_amd64_v1")))\' .goreleaser.yml)' release-snapshot
-endif
+e2e-test: e2e-build-image e2e-ipam-components
 	$(info $(M) $(if $(filter $(E2E_DRYRUN), true),dry-,)running e2e tests$(if $(E2E_LABEL), labelled "$(E2E_LABEL)")$(if $(E2E_FOCUS), matching "$(E2E_FOCUS)"))
-	env E2E_IMAGE_TAG="$$(gojq --raw-output '.version+"-"+.runtime.goarch' $(REPO_ROOT)/dist/metadata.json)" \
+	env CAPI_VERSION="$(CAPI_VERSION)" \
+	  E2E_IMAGE_TAG="$(E2E_IMAGE_TAG)" \
+	  E2E_PROVIDER_VERSION="$(E2E_PROVIDER_VERSION)" \
+	  E2E_IPAM_COMPONENTS="$(E2E_IPAM_COMPONENTS)" \
 	  envsubst -no-unset -no-empty -i '$(E2E_CONF_FILE)' -o '$(E2E_CONF_FILE_ENVSUBST)'
-	ginkgo run \
+	CGO_ENABLED=0 go run github.com/onsi/ginkgo/v2/ginkgo run \
 		--r \
 		--show-node-events \
 		--trace \
@@ -114,9 +153,10 @@ endif
 		--tags e2e \
 		test/e2e/... -- \
 			-e2e.artifacts-folder="$(ARTIFACTS)" \
+			-e2e.bootstrap-cluster-name="$(KIND_CLUSTER_NAME)-e2e" \
+			-e2e.bootstrap-kind-image="$(KINDEST_IMAGE)" \
 			-e2e.config="$(E2E_CONF_FILE_ENVSUBST)" \
-			$(if $(filter $(E2E_SKIP_CLEANUP),true),-e2e.skip-resource-cleanup) \
-			-e2e.bootstrap-kind-version="$(KINDEST_IMAGE_TAG)"
+			$(if $(filter $(E2E_SKIP_CLEANUP),true),-e2e.skip-resource-cleanup)
 	go tool cover \
 	  -html=coverage-e2e.out \
 	  -o coverage-e2e.html
@@ -208,7 +248,7 @@ go-generate: ; $(info $(M) running go generate)
 		output:crd:dir=config/crd/bases
 	controller-gen paths="./..." \
 	  webhook:headerFile="hack/license-header.yaml.txt"
-	$(MAKE) go-fix golines
+	$(MAKE) golines
 
 .PHONY: go-mod-upgrade
 go-mod-upgrade: ## Interactive check for direct module dependency upgrades
