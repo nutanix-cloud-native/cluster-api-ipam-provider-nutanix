@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.5.0 (2026-07-02)
+
+<!-- Release notes generated using configuration in .github/release.yaml at main -->
+
+## What's Changed
+### Exciting New Features 🎉
+* feat: Add verbose flag and hide API calls by default by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/58
+* feat: go 1.24.1 by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/71
+* feat: Use kustomize instead of Helm for deployment by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/72
+* feat: use converged prism client by @thunderboltsid in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/75
+* feat: move to v1beta2 contract and add e2e test by @thunderboltsid in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/80
+### Fixes 🔧
+* fix: getByExt incorrectly expecting pointers by @dkoshkin in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/51
+* fix: run snapshot manifest hooks in one shell by @thunderboltsid in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/76
+### Other Changes
+* build: Update all tools by @jimmidyson in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/70
+* ci: update devbox install action to v0.15 by @thunderboltsid in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/74
+* ci: migrate to Black Duck security scan action by @thunderboltsid in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/77
+* ci: use go1.25 and go1.26.3 toolchain by @thunderboltsid in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/79
+
+## New Contributors
+* @dkoshkin made their first contribution in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/51
+* @thunderboltsid made their first contribution in https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/pull/74
+
+**Full Changelog**: https://github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/compare/v0.4.0...v0.5.0
+
 ## 0.4.0 (2024-12-04)
 
 <!-- Release notes generated using configuration in .github/release.yaml at main -->
