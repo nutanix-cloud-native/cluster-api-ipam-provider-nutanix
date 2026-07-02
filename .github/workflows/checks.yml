@@ -69,7 +69,7 @@ jobs:
           enable-cache: true
 
       - name: Go cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/go-build
@@ -131,7 +131,7 @@ jobs:
           echo mod-cache-path="$(devbox run -- go env GOMODCACHE)" >>"${GITHUB_OUTPUT}"
 
       - name: Go cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/go-build
@@ -215,7 +215,7 @@ jobs:
           enable-cache: true
 
       - name: Go cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/go-build
@@ -225,7 +225,7 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Set up pre-commit cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-3|${{ hashFiles('.pre-commit-config.yaml') }}
