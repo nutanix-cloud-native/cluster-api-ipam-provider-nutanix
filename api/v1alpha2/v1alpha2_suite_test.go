@@ -1,10 +1,12 @@
 // Copyright 2024 Nutanix. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package v1alpha1_test
+package v1alpha2_test
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -15,7 +17,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha1"
+	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha2"
 )
 
 var (
@@ -26,7 +28,7 @@ var (
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "v1alpha1 Suite")
+	RunSpecs(t, "v1alpha2 Suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -34,10 +36,7 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 	crdTempDir := GinkgoT().TempDir()
-
-	Expect(
-		exec.Command("kustomize", "build", "../../config/crd", "-o", crdTempDir).Run(),
-	).To(Succeed())
+	Expect(buildCRDs(crdTempDir)).To(Succeed())
 
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{crdTempDir},
@@ -48,7 +47,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 
-	err = v1alpha1.AddToScheme(scheme.Scheme)
+	err = v1alpha2.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
@@ -61,3 +60,14 @@ var _ = AfterSuite(func() {
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
 })
+
+func buildCRDs(outDir string) error {
+	if _, err := exec.LookPath("kustomize"); err == nil {
+		return exec.Command("kustomize", "build", "../../config/crd", "-o", outDir).Run()
+	}
+	out, err := exec.Command("kubectl", "kustomize", "../../config/crd").Output()
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(outDir, "crds.yaml"), out, 0o600)
+}

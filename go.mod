@@ -10,7 +10,8 @@ toolchain go1.26.3
 require (
 	github.com/google/uuid v1.6.0
 	github.com/nutanix-cloud-native/prism-go-client v0.7.4-0.20260620224143-0c80364bbb5f
-	github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4 v4.2.1
+	github.com/nutanix/ntnx-api-golang-clients/networking-go-client/v4 v4.4.1
+	github.com/nutanix/ntnx-api-golang-clients/prism-go-client/v4 v4.4.1
 	github.com/onsi/ginkgo/v2 v2.31.0
 	github.com/onsi/gomega v1.40.0
 	github.com/pkg/errors v0.9.1
@@ -100,13 +101,13 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nutanix/ntnx-api-golang-clients/clustermgmt-go-client/v4 v4.2.2 // indirect
-	github.com/nutanix/ntnx-api-golang-clients/datapolicies-go-client/v4 v4.2.1 // indirect
-	github.com/nutanix/ntnx-api-golang-clients/iam-go-client/v4 v4.0.1 // indirect
-	github.com/nutanix/ntnx-api-golang-clients/monitoring-go-client/v4 v4.2.2 // indirect
-	github.com/nutanix/ntnx-api-golang-clients/prism-go-client/v4 v4.2.1 // indirect
-	github.com/nutanix/ntnx-api-golang-clients/vmm-go-client/v4 v4.2.1 // indirect
-	github.com/nutanix/ntnx-api-golang-clients/volumes-go-client/v4 v4.2.1 // indirect
+	github.com/nutanix/ntnx-api-golang-clients/clustermgmt-go-client/v4 v4.3.1 // indirect
+	github.com/nutanix/ntnx-api-golang-clients/datapolicies-go-client/v4 v4.3.1 // indirect
+	github.com/nutanix/ntnx-api-golang-clients/iam-go-client/v4 v4.1.2-beta.3 // indirect
+	github.com/nutanix/ntnx-api-golang-clients/monitoring-go-client/v4 v4.3.1 // indirect
+	github.com/nutanix/ntnx-api-golang-clients/multidomain-go-client/v4 v4.4.1-beta.1 // indirect
+	github.com/nutanix/ntnx-api-golang-clients/vmm-go-client/v4 v4.3.1 // indirect
+	github.com/nutanix/ntnx-api-golang-clients/volumes-go-client/v4 v4.3.1 // indirect
 	github.com/olekukonko/cat v0.0.0-20250911104152-50322a0618f6 // indirect
 	github.com/olekukonko/errors v1.1.0 // indirect
 	github.com/olekukonko/ll v0.1.1 // indirect
@@ -122,7 +123,7 @@ require (
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
-	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
@@ -160,3 +161,5 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.0 // indirect
 )
+
+replace github.com/nutanix-cloud-native/prism-go-client => github.com/nutanix-cloud-native/prism-go-client v0.8.4-0.20261109160340-348341885ccb

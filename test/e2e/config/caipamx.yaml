@@ -51,7 +51,14 @@ variables:
   NUTANIX_PASSWORD: "${NUTANIX_PASSWORD}"
   # Prism Central TLS verification mode.
   NUTANIX_INSECURE: "false"
-  # Name of the subnet to reserve IPs from.
+  # Name or UUID of the subnet to reserve IPs from.
   NUTANIX_SUBNET: "${NUTANIX_SUBNET}"
-  # Name of the Prism Element cluster hosting the subnet.
+  # Optional PE cluster to resolve a VLAN subnet name. Leave empty for overlay/project subnets
+  # (prefer subnet UUID), or when using NUTANIX_PRIVATE_SUBNET as an overlay subnet.
   NUTANIX_CLUSTER: "${NUTANIX_CLUSTER}"
+  # External subnet name or extID for floating-IP allocation. Floating-IP specs skip when unset.
+  NUTANIX_EXTERNAL_SUBNET: "${NUTANIX_EXTERNAL_SUBNET}"
+  # Optional Prism project name or UUID (mapped to NutanixResourceIdentifier in tests).
+  NUTANIX_FLOATING_IP_PROJECT: "${NUTANIX_FLOATING_IP_PROJECT}"
+  # Optional overlay private subnet for floating-IP association. Defaults to NUTANIX_SUBNET when unset.
+  NUTANIX_PRIVATE_SUBNET: "${NUTANIX_PRIVATE_SUBNET}"

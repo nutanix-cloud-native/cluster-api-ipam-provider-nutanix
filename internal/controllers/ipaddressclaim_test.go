@@ -1,7 +1,7 @@
 // Copyright 2024 Nutanix. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-//go:generate mockgen -copyright_file ../../hack/license-header.txt -typed -destination ./mockclient/mock_client.go -package mockclient github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client Client,ClusterClient,NetworkingClient
+//go:generate mockgen -copyright_file ../../hack/license-header.txt -typed -destination ./mockclient/mock_client.go -package mockclient github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client Client,ClusterClient,NetworkingClient,FloatingIPsClient
 
 package controllers
 
@@ -27,7 +27,7 @@ import (
 
 	"github.com/nutanix-cloud-native/prism-go-client/environment/credentials"
 
-	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha1"
+	v1alpha2 "github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha2"
 	pcclient "github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/controllers/mockclient"
 )
@@ -54,7 +54,7 @@ func newClaim(name, namespace, poolKind, poolName string) ipamv1.IPAddressClaim 
 		},
 		Spec: ipamv1.IPAddressClaimSpec{
 			PoolRef: ipamv1.IPPoolReference{
-				APIGroup: v1alpha1.GroupVersion.Group,
+				APIGroup: v1alpha2.GroupVersion.Group,
 				Kind:     poolKind,
 				Name:     poolName,
 			},
@@ -104,7 +104,7 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 				poolName    = "test-pool"
 			)
 
-			var pool v1alpha1.NutanixIPPool
+			var pool v1alpha2.NutanixIPPool
 
 			BeforeEach(func() {
 				secret := corev1.Secret{
@@ -129,20 +129,20 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 				}
 				Expect(env.CreateAndWait(context.Background(), &secret)).To(Succeed())
 
-				pool = v1alpha1.NutanixIPPool{
+				pool = v1alpha2.NutanixIPPool{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      poolName,
 						Namespace: namespace,
 					},
-					Spec: v1alpha1.NutanixIPPoolSpec{
-						PrismCentral: v1alpha1.PrismCentral{
+					Spec: v1alpha2.NutanixIPPoolSpec{
+						PrismCentral: v1alpha2.PrismCentral{
 							Address: "prism.example.com",
 							Port:    9440,
-							CredentialsSecretRef: v1alpha1.LocalSecretRef{
+							CredentialsSecretRef: v1alpha2.LocalSecretRef{
 								Name: "test-secret",
 							},
 						},
-						Subnet: uuid.NewString(),
+						Subnet: v1alpha2.NewNutanixResourceIdentifierUUID(uuid.NewString()),
 					},
 				}
 				Expect(env.CreateAndWait(context.Background(), &pool)).To(Succeed())
@@ -155,13 +155,13 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 				gomock.InOrder(
 					mockNC.EXPECT().GetSubnet(
 						gomock.Any(),
-						pool.Spec.Subnet,
+						pool.Spec.Subnet.String(),
 						gomock.Any(),
 					).Return(pcclient.NewSubnet(uuid.New(), 24), nil),
 					mockNC.EXPECT().ReserveIPs(
 						gomock.Any(),
 						gomock.Any(),
-						pool.Spec.Subnet,
+						pool.Spec.Subnet.String(),
 						gomock.Any(),
 					).Return(
 						[]netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil,
@@ -169,12 +169,12 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 					mockNC.EXPECT().UnreserveIPs(
 						gomock.Any(),
 						gomock.Any(),
-						pool.Spec.Subnet,
+						pool.Spec.Subnet.String(),
 						gomock.Any(),
 					).Return(nil, nil),
 				)
 
-				claim := newClaim("test", namespace, v1alpha1.NutanixIPPoolKind, poolName)
+				claim := newClaim("test", namespace, v1alpha2.NutanixIPPoolKind, poolName)
 				expectedIPAddress := ipamv1.IPAddress{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:       "test",
@@ -187,10 +187,10 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 							Kind:               "IPAddressClaim",
 							Name:               "test",
 						}, {
-							APIVersion:         v1alpha1.GroupVersion.String(),
+							APIVersion:         v1alpha2.GroupVersion.String(),
 							BlockOwnerDeletion: ptr.To(true),
 							Controller:         ptr.To(false),
-							Kind:               v1alpha1.NutanixIPPoolKind,
+							Kind:               v1alpha2.NutanixIPPoolKind,
 							Name:               poolName,
 						}},
 					},
@@ -199,8 +199,8 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 							Name: "test",
 						},
 						PoolRef: ipamv1.IPPoolReference{
-							APIGroup: v1alpha1.GroupVersion.Group,
-							Kind:     v1alpha1.NutanixIPPoolKind,
+							APIGroup: v1alpha2.GroupVersion.Group,
+							Kind:     v1alpha2.NutanixIPPoolKind,
 							Name:     poolName,
 						},
 						Address: "127.0.0.1",
@@ -237,13 +237,13 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 						expectedCalls = append(expectedCalls,
 							mockNC.EXPECT().GetSubnet(
 								gomock.Any(),
-								pool.Spec.Subnet,
+								pool.Spec.Subnet.String(),
 								gomock.Any(),
 							).Return(pcclient.NewSubnet(uuid.New(), 24), nil).Call,
 							mockNC.EXPECT().ReserveIPs(
 								gomock.Any(),
 								gomock.Any(),
-								pool.Spec.Subnet,
+								pool.Spec.Subnet.String(),
 								gomock.Any(),
 							).Return(nil, errors.New("task failed")).Call,
 						)
@@ -251,13 +251,13 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 					expectedCalls = append(expectedCalls,
 						mockNC.EXPECT().GetSubnet(
 							gomock.Any(),
-							pool.Spec.Subnet,
+							pool.Spec.Subnet.String(),
 							gomock.Any(),
 						).Return(pcclient.NewSubnet(uuid.New(), 24), nil).Call,
 						mockNC.EXPECT().ReserveIPs(
 							gomock.Any(),
 							gomock.Any(),
-							pool.Spec.Subnet,
+							pool.Spec.Subnet.String(),
 							gomock.Any(),
 						).Return([]netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil).Call,
 					)
@@ -265,19 +265,19 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 						expectedCalls = append(expectedCalls, mockNC.EXPECT().UnreserveIPs(
 							gomock.Any(),
 							gomock.Any(),
-							pool.Spec.Subnet,
+							pool.Spec.Subnet.String(),
 							gomock.Any(),
 						).Return(nil, errors.New("task failed")).Call)
 					}
 					expectedCalls = append(expectedCalls, mockNC.EXPECT().UnreserveIPs(
 						gomock.Any(),
 						gomock.Any(),
-						pool.Spec.Subnet,
+						pool.Spec.Subnet.String(),
 						gomock.Any(),
 					).Return(nil, nil).Call)
 					gomock.InOrder(expectedCalls...)
 
-					claim := newClaim("test", namespace, v1alpha1.NutanixIPPoolKind, poolName)
+					claim := newClaim("test", namespace, v1alpha2.NutanixIPPoolKind, poolName)
 					expectedIPAddress := ipamv1.IPAddress{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:       "test",
@@ -290,10 +290,10 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 								Kind:               "IPAddressClaim",
 								Name:               "test",
 							}, {
-								APIVersion:         v1alpha1.GroupVersion.String(),
+								APIVersion:         v1alpha2.GroupVersion.String(),
 								BlockOwnerDeletion: ptr.To(true),
 								Controller:         ptr.To(false),
-								Kind:               v1alpha1.NutanixIPPoolKind,
+								Kind:               v1alpha2.NutanixIPPoolKind,
 								Name:               poolName,
 							}},
 						},
@@ -302,8 +302,8 @@ var _ = Describe("IPAddressClaimReconciler", func() {
 								Name: "test",
 							},
 							PoolRef: ipamv1.IPPoolReference{
-								APIGroup: v1alpha1.GroupVersion.Group,
-								Kind:     v1alpha1.NutanixIPPoolKind,
+								APIGroup: v1alpha2.GroupVersion.Group,
+								Kind:     v1alpha2.NutanixIPPoolKind,
 								Name:     poolName,
 							},
 							Address: "127.0.0.1",

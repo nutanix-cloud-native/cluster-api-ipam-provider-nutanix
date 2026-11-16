@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha1"
+	v1alpha2 "github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha2"
 )
 
 func init() {
@@ -143,7 +143,7 @@ func newEnvironment(uncachedObjs ...client.Object) *Environment {
 	utilruntime.Must(clientgoscheme.AddToScheme(mgrScheme))
 	utilruntime.Must(clusterv1.AddToScheme(mgrScheme))
 	utilruntime.Must(ipamv1.AddToScheme(mgrScheme))
-	utilruntime.Must(v1alpha1.AddToScheme(mgrScheme))
+	utilruntime.Must(v1alpha2.AddToScheme(mgrScheme))
 
 	options := manager.Options{
 		Scheme: mgrScheme,

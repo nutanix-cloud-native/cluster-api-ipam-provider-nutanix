@@ -39,9 +39,10 @@ EOF
 ```shell
 $ export NUTANIX_ENDPOINT=<pc-ip or pc-fqdn>
 $ export NUTANIX_SUBNET=...
+$ export NUTANIX_CLUSTER=...
 
 $ cat <<EOF | kubectl apply --server-side -f -
-apiVersion: ipam.cluster.x-k8s.io/v1alpha1
+apiVersion: ipam.cluster.x-k8s.io/v1alpha2
 kind: NutanixIPPool
 metadata:
   name: nutanixippool-sample
@@ -51,7 +52,12 @@ spec:
     port: 9440
     credentialsSecretRef:
       name: pc-creds-for-ipam
-  subnet: ${NUTANIX_SUBNET}
+  subnet:
+    type: name
+    name: ${NUTANIX_SUBNET}
+  cluster:
+    type: name
+    name: ${NUTANIX_CLUSTER}
 EOF
 ```
 

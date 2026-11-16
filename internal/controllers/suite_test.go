@@ -43,6 +43,11 @@ func TestMain(m *testing.M) {
 		go informer.Run(ctx.Done())
 		Expect(clientgocache.WaitForCacheSync(ctx.Done(), informer.HasSynced)).To(BeTrue())
 
+		configMapInformer := informerFactory.Core().V1().ConfigMaps()
+		cmInformer := configMapInformer.Informer()
+		go cmInformer.Run(ctx.Done())
+		Expect(clientgocache.WaitForCacheSync(ctx.Done(), cmInformer.HasSynced)).To(BeTrue())
+
 		Expect(index.SetupIndexes(ctx, mgr)).To(Succeed())
 		Expect(
 			(&ipamutil.ClaimReconciler{
@@ -51,12 +56,40 @@ func TestMain(m *testing.M) {
 				Adapter: &NutanixProviderAdapter{
 					k8sClient:      mgr.GetClient(),
 					secretInformer: secretInformer,
+					cmInformer:     configMapInformer,
 					pcClientGetter: func(_ client.CachedClientParams) (client.Client, error) {
 						return mockPCClient, nil
 					},
 				},
 			}).SetupWithManager(ctx, mgr),
 		).To(Succeed())
+
+		fipOpts := DefaultReconcilerOptions()
+		fipOpts.maxConcurrentReconciles = 1
+		fipOpts.minRequeueTime = 100 * time.Millisecond
+		fipOpts.maxRequeueTime = time.Second
+
+		Expect((&FloatingIPClaimReconciler{
+			Client:            mgr.GetClient(),
+			Scheme:            mgr.GetScheme(),
+			SecretInformer:    secretInformer,
+			ConfigMapInformer: configMapInformer,
+			PCClientGetter: func(_ client.CachedClientParams) (client.Client, error) {
+				return mockPCClient, nil
+			},
+			Opts: fipOpts,
+		}).SetupWithManager(ctx, mgr)).To(Succeed())
+
+		Expect((&FloatingIPBindingReconciler{
+			Client:            mgr.GetClient(),
+			Scheme:            mgr.GetScheme(),
+			SecretInformer:    secretInformer,
+			ConfigMapInformer: configMapInformer,
+			PCClientGetter: func(_ client.CachedClientParams) (client.Client, error) {
+				return mockPCClient, nil
+			},
+			Opts: fipOpts,
+		}).SetupWithManager(ctx, mgr)).To(Succeed())
 	}
 	SetDefaultEventuallyPollingInterval(100 * time.Millisecond)
 	SetDefaultEventuallyTimeout(5 * time.Second)

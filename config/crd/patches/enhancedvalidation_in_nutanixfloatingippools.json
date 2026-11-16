@@ -1,0 +1,19 @@
+[
+  {
+    "op": "add",
+    "path": "/spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/prismCentral/properties/address/oneOf",
+    "value": [
+      {"format": "ipv4"},
+      {"format": "ipv6"},
+      {"format": "hostname"}
+    ]
+  },
+  {
+    "op": "add",
+    "path": "/spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/prismCentral/properties/additionalTrustBundle/oneOf",
+    "value": [
+      {"required": ["trustBundleConfigMapRef"]},
+      {"required": ["trustBundleData"]}
+    ]
+  }
+]

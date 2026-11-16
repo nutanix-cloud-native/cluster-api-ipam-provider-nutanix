@@ -33,8 +33,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
 
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha1"
+	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha2"
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/controllers"
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/index"
 )
@@ -48,6 +51,7 @@ func main() {
 	utilruntime.Must(clusterv1.AddToScheme(clientScheme))
 	utilruntime.Must(ipamv1.AddToScheme(clientScheme))
 	utilruntime.Must(v1alpha1.AddToScheme(clientScheme))
+	utilruntime.Must(v1alpha2.AddToScheme(clientScheme))
 
 	mgrOptions := &ctrl.Options{
 		Scheme: clientScheme,
@@ -57,6 +61,10 @@ func main() {
 		HealthProbeBindAddress: ":8081",
 		LeaderElection:         true,
 		LeaderElectionID:       "caipamx-leader-election",
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port:    9444,
+			CertDir: "/tmp/k8s-webhook-server/webhook-certs",
+		}),
 	}
 
 	pflag.CommandLine.StringVar(
@@ -152,6 +160,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	mgr.GetWebhookServer().Register("/convert", conversion.NewWebhookHandler(
+		mgr.GetScheme(),
+		mgr.GetConverterRegistry(),
+	))
+
 	if err = index.SetupIndexes(signalCtx, mgr); err != nil {
 		setupLog.Error(err, "failed to setup indexes")
 		os.Exit(1)
@@ -178,6 +191,31 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "IPAddressClaim")
 		os.Exit(1)
 	}
+
+	if err = (&controllers.FloatingIPClaimReconciler{
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		WatchFilterValue:  watchFilter,
+		SecretInformer:    secretInformer,
+		ConfigMapInformer: configMapInformer,
+		Opts:              reconcilerOpts,
+	}).SetupWithManager(signalCtx, mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "FloatingIPClaim")
+		os.Exit(1)
+	}
+
+	if err = (&controllers.FloatingIPBindingReconciler{
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		WatchFilterValue:  watchFilter,
+		SecretInformer:    secretInformer,
+		ConfigMapInformer: configMapInformer,
+		Opts:              reconcilerOpts,
+	}).SetupWithManager(signalCtx, mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "FloatingIPBinding")
+		os.Exit(1)
+	}
+
 	if err := mgr.Start(signalCtx); err != nil {
 		setupLog.Error(err, "unable to start controller manager")
 		os.Exit(1)

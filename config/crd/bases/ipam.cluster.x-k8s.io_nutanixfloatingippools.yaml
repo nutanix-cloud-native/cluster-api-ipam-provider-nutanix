@@ -1,0 +1,229 @@
+# Copyright 2025 Nutanix. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: nutanixfloatingippools.ipam.cluster.x-k8s.io
+spec:
+  group: ipam.cluster.x-k8s.io
+  names:
+    categories:
+    - cluster-api
+    kind: NutanixFloatingIPPool
+    listKind: NutanixFloatingIPPoolList
+    plural: nutanixfloatingippools
+    singular: nutanixfloatingippool
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: External subnet identifier type (uuid or name)
+      jsonPath: .spec.subnet.type
+      name: SubnetType
+      type: string
+    - description: Optional PE Cluster identifier type
+      jsonPath: .spec.cluster.type
+      name: ClusterType
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha2
+    schema:
+      openAPIV3Schema:
+        description: NutanixFloatingIPPool is the Schema for the nutanixfloatingippools
+          API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: NutanixFloatingIPPoolSpec defines the desired state of NutanixFloatingIPPool.
+            properties:
+              cluster:
+                description: |-
+                  Cluster is the Nutanix PE cluster to use to resolve the Subnet name to a UUID.
+                  This field is only required when Subnet.type is name.
+                properties:
+                  name:
+                    description: name is the resource name in the PC
+                    minLength: 1
+                    type: string
+                  type:
+                    description: Type is the identifier type to use for this resource.
+                    enum:
+                    - uuid
+                    - name
+                    type: string
+                  uuid:
+                    description: uuid is the UUID of the resource in the PC.
+                    format: uuid
+                    maxLength: 36
+                    minLength: 36
+                    type: string
+                required:
+                - type
+                type: object
+                x-kubernetes-validations:
+                - message: '''name'' must be set when type is ''name'', and forbidden
+                    otherwise'
+                  rule: 'self.type == ''name'' ? has(self.name) : !has(self.name)'
+                - message: '''uuid'' must be set when type is ''uuid'', and forbidden
+                    otherwise'
+                  rule: 'self.type == ''uuid'' ? has(self.uuid) && self.uuid.contains(''-'')
+                    : !has(self.uuid)'
+              prismCentral:
+                description: PrismCentral is the configuration details of the Prism
+                  Central instance to use for floating IP allocation.
+                properties:
+                  additionalTrustBundle:
+                    description: |-
+                      AdditionalTrustBundle is a PEM encoded x509 cert for the RootCA that was used to create the certificate
+                      for a Prism Central that uses certificates that were issued by a non-publicly trusted RootCA. The trust
+                      bundle is added to the cert pool used to authenticate the TLS connection to the Prism Central.
+                    properties:
+                      trustBundleConfigMapRef:
+                        description: ConfigMapReference to the configmap holding the
+                          trust bundle data.
+                        properties:
+                          name:
+                            description: Name is the name of the referenced configmap.
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      trustBundleData:
+                        description: Data of the trust bundle.
+                        format: byte
+                        type: string
+                    type: object
+                  address:
+                    description: |-
+                      Address is the address of the Prism Central instance to use for IPAM.
+                      Address can either be the IP address or the DNS name of the Prism Central instance, omitting
+                      the protocol and port.
+                    type: string
+                  credentialsSecretRef:
+                    description: |-
+                      CredentialsSecretRef is the reference to the secret containing the credentials to use to connect
+                      the specified Prism Central.
+                    properties:
+                      name:
+                        description: Name is the name of the referenced secret.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  insecure:
+                    default: false
+                    description: use insecure connection to Prism endpoint
+                    type: boolean
+                  port:
+                    default: 9440
+                    description: Port is the port of the Prism Central instance to
+                      use for IPAM.
+                    maximum: 65535
+                    minimum: 1
+                    type: integer
+                required:
+                - address
+                - credentialsSecretRef
+                - port
+                type: object
+              project:
+                description: |-
+                  Project is the optional Prism project that owns allocated floating IPs.
+                  Accepts either a project UUID or project name; names are resolved at allocation time.
+                  Required on project-scoped Prism Central deployments.
+                properties:
+                  name:
+                    description: name is the resource name in the PC
+                    minLength: 1
+                    type: string
+                  type:
+                    description: Type is the identifier type to use for this resource.
+                    enum:
+                    - uuid
+                    - name
+                    type: string
+                  uuid:
+                    description: uuid is the UUID of the resource in the PC.
+                    format: uuid
+                    maxLength: 36
+                    minLength: 36
+                    type: string
+                required:
+                - type
+                type: object
+                x-kubernetes-validations:
+                - message: '''name'' must be set when type is ''name'', and forbidden
+                    otherwise'
+                  rule: 'self.type == ''name'' ? has(self.name) : !has(self.name)'
+                - message: '''uuid'' must be set when type is ''uuid'', and forbidden
+                    otherwise'
+                  rule: 'self.type == ''uuid'' ? has(self.uuid) && self.uuid.contains(''-'')
+                    : !has(self.uuid)'
+              subnet:
+                description: |-
+                  Subnet is the Nutanix external subnet to allocate floating IPs from.
+                  When type is name, the Cluster field must be set in order to resolve the name to a UUID.
+                properties:
+                  name:
+                    description: name is the resource name in the PC
+                    minLength: 1
+                    type: string
+                  type:
+                    description: Type is the identifier type to use for this resource.
+                    enum:
+                    - uuid
+                    - name
+                    type: string
+                  uuid:
+                    description: uuid is the UUID of the resource in the PC.
+                    format: uuid
+                    maxLength: 36
+                    minLength: 36
+                    type: string
+                required:
+                - type
+                type: object
+                x-kubernetes-validations:
+                - message: '''name'' must be set when type is ''name'', and forbidden
+                    otherwise'
+                  rule: 'self.type == ''name'' ? has(self.name) : !has(self.name)'
+                - message: '''uuid'' must be set when type is ''uuid'', and forbidden
+                    otherwise'
+                  rule: 'self.type == ''uuid'' ? has(self.uuid) && self.uuid.contains(''-'')
+                    : !has(self.uuid)'
+            required:
+            - prismCentral
+            - subnet
+            type: object
+            x-kubernetes-validations:
+            - message: cluster is required when subnet.type is name
+              rule: self.subnet.type == 'uuid' || has(self.cluster)
+          status:
+            description: NutanixFloatingIPPoolStatus defines the observed state of
+              NutanixFloatingIPPool.
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

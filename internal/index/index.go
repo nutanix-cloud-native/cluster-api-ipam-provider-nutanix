@@ -11,6 +11,8 @@ import (
 	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	v1alpha2 "github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha2"
 )
 
 const (
@@ -19,6 +21,9 @@ const (
 
 	// IPAddressClaimPoolRefCombinedField is an index for the poolRef of an IPAddressClaim.
 	IPAddressClaimPoolRefCombinedField = "index.poolRef"
+
+	// FloatingIPBindingFloatingIPRefField is an index for FloatingIPBinding.spec.floatingIPRef.name.
+	FloatingIPBindingFloatingIPRefField = "index.floatingIPRef"
 )
 
 // SetupIndexes adds indexes to the cache of a Manager.
@@ -31,10 +36,29 @@ func SetupIndexes(ctx context.Context, mgr manager.Manager) error {
 		return err
 	}
 
-	return mgr.GetCache().IndexField(ctx, &ipamv1.IPAddressClaim{},
+	err = mgr.GetCache().IndexField(ctx, &ipamv1.IPAddressClaim{},
 		IPAddressClaimPoolRefCombinedField,
 		ipAddressClaimByCombinedPoolRef,
 	)
+	if err != nil {
+		return err
+	}
+
+	return mgr.GetCache().IndexField(ctx, &v1alpha2.FloatingIPBinding{},
+		FloatingIPBindingFloatingIPRefField,
+		floatingIPBindingByFloatingIPRef,
+	)
+}
+
+func floatingIPBindingByFloatingIPRef(o client.Object) []string {
+	binding, ok := o.(*v1alpha2.FloatingIPBinding)
+	if !ok {
+		panic(fmt.Sprintf("Expected a FloatingIPBinding but got a %T", o))
+	}
+	if binding.Spec.FloatingIPRef.Name == "" {
+		return nil
+	}
+	return []string{binding.Spec.FloatingIPRef.Name}
 }
 
 // IPAddressByCombinedPoolRef fulfills the IndexerFunc for IPAddress poolRefs.

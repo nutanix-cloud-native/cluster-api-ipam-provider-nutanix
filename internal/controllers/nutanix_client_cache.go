@@ -30,6 +30,15 @@ func newClientCacheParams(
 	cmInformer coreinformers.ConfigMapInformer,
 	pool genericNutanixIPPool,
 ) (client.CachedClientParams, error) {
+	return newClientCacheParamsForObject(prismEndpoint, secretInformer, cmInformer, pool)
+}
+
+func newClientCacheParamsForObject(
+	prismEndpoint credentials.NutanixPrismEndpoint,
+	secretInformer coreinformers.SecretInformer,
+	cmInformer coreinformers.ConfigMapInformer,
+	obj ctrlclient.Object,
+) (client.CachedClientParams, error) {
 	env := environment.NewEnvironment(kubernetes.NewProvider(
 		prismEndpoint,
 		secretInformer,
@@ -42,7 +51,7 @@ func newClientCacheParams(
 	}
 
 	return &clientCacheParams{
-		key:                ctrlclient.ObjectKeyFromObject(pool).String(),
+		key:                ctrlclient.ObjectKeyFromObject(obj).String(),
 		managementEndpoint: *me,
 	}, nil
 }

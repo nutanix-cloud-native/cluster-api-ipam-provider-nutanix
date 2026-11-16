@@ -169,14 +169,24 @@ func (n *networkingClient) ReserveIPs(
 		reservation.ClientContext = ptr.To(opts.ClientContext)
 	}
 
-	// ReserveIpsBySubnetId submits the reservation task and blocks until it
-	// completes, returning the reserved IP addresses from the task completion
-	// details.
-	reservedIPs, err := n.v4Client.Subnets.ReserveIpsBySubnetId(
+	// ReserveIpsBySubnetId submits the reservation task and returns a task
+	// reference. We wait for completion and read reserved IPs from the task
+	// completion details.
+	taskRef, err := n.v4Client.Subnets.ReserveIpsBySubnetId(
 		ctx,
 		apiSubnet.ExtID().String(),
 		&reservation.IpReserveSpec,
 	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reserve IP in subnet %s: %w", subnet, err)
+	}
+
+	taskID, err := taskExtID(taskRef)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reserve IP in subnet %s: %w", subnet, err)
+	}
+
+	reservedIPs, err := waitForIPTask(ctx, n.v4Client, taskID, reservedIPsValueField, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reserve IP in subnet %s: %w", subnet, err)
 	}
@@ -307,11 +317,11 @@ func (n *networkingClient) UnreserveIPs(
 	unreservation := internalUnreserveSpec{}
 	unreserveType(&unreservation)
 
-	// UnreserveIpsBySubnetId submits the unreservation task, blocks until it
-	// completes, and returns the IPs the server released. This is useful when
-	// unreserving by client context, where the caller does not know up front
-	// which IPs will be released.
-	unreservedIPs, err := n.v4Client.Subnets.UnreserveIpsBySubnetId(
+	// UnreserveIpsBySubnetId submits the unreservation task and returns a task
+	// reference. We wait for completion and read the IPs the server released.
+	// This is useful when unreserving by client context, where the caller does
+	// not know up front which IPs will be released.
+	taskRef, err := n.v4Client.Subnets.UnreserveIpsBySubnetId(
 		ctx,
 		apiSubnet.ExtID().String(),
 		&unreservation.IpUnreserveSpec,
@@ -319,6 +329,19 @@ func (n *networkingClient) UnreserveIPs(
 	if err != nil {
 		// Unreserving an IP that was never reserved (or already released) is
 		// not an error from our perspective; the desired end state is reached.
+		if unreservationAlreadyReleased(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to unreserve IP in subnet %s: %w", subnet, err)
+	}
+
+	taskID, err := taskExtID(taskRef)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unreserve IP in subnet %s: %w", subnet, err)
+	}
+
+	unreservedIPs, err := waitForIPTask(ctx, n.v4Client, taskID, unreservedIPsValueField, false)
+	if err != nil {
 		if unreservationAlreadyReleased(err) {
 			return nil, nil
 		}
@@ -343,8 +366,9 @@ func unreservationAlreadyReleased(err error) bool {
 
 // Subnet represents a subnet in the networking API.
 type Subnet struct {
-	extID  uuid.UUID
-	prefix int32
+	extID    uuid.UUID
+	prefix   int32
+	vpcExtID string
 }
 
 func NewSubnet(extID uuid.UUID, prefix int32) *Subnet {
@@ -362,6 +386,11 @@ func (s *Subnet) ExtID() uuid.UUID {
 // Prefix returns the subnet prefix length.
 func (s *Subnet) Prefix() int32 {
 	return s.prefix
+}
+
+// VPCExtID returns the VPC external ID for overlay subnets. Empty for VLAN subnets.
+func (s *Subnet) VPCExtID() string {
+	return s.vpcExtID
 }
 
 // GetSubnetOpts holds optional configuration for getting a subnet.
@@ -495,7 +524,11 @@ func newSubnetFromAPI(apiSubnet *networkingapi.Subnet, description string) (*Sub
 		return nil, err
 	}
 
-	return NewSubnet(subnetUUID, prefix), nil
+	subnet := NewSubnet(subnetUUID, prefix)
+	if apiSubnet.VpcReference != nil {
+		subnet.vpcExtID = *apiSubnet.VpcReference
+	}
+	return subnet, nil
 }
 
 func subnetPrefix(apiSubnet *networkingapi.Subnet, description string) (int32, error) {

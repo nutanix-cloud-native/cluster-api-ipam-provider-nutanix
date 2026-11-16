@@ -45,6 +45,8 @@ rules:
 - apiGroups:
   - ipam.cluster.x-k8s.io
   resources:
+  - floatingipbindings
+  - floatingipclaims
   - ipaddressclaims
   verbs:
   - get
@@ -55,6 +57,9 @@ rules:
 - apiGroups:
   - ipam.cluster.x-k8s.io
   resources:
+  - floatingipbindings/finalizers
+  - floatingipclaims/finalizers
+  - floatingips/finalizers
   - ipaddressclaims/finalizers
   - ipaddresses/finalizers
   - nutanixippools/finalizers
@@ -63,6 +68,9 @@ rules:
 - apiGroups:
   - ipam.cluster.x-k8s.io
   resources:
+  - floatingipbindings/status
+  - floatingipclaims/status
+  - floatingips/status
   - ipaddressclaims/status
   - ipaddresses/status
   verbs:
@@ -72,6 +80,7 @@ rules:
 - apiGroups:
   - ipam.cluster.x-k8s.io
   resources:
+  - floatingips
   - ipaddresses
   verbs:
   - create
@@ -84,6 +93,7 @@ rules:
 - apiGroups:
   - ipam.cluster.x-k8s.io
   resources:
+  - nutanixfloatingippools
   - nutanixippools
   verbs:
   - get

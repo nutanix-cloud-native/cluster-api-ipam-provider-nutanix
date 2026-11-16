@@ -124,11 +124,21 @@ e2e-test: ## Runs e2e tests
 ifneq ($(wildcard test/e2e/*),)
 e2e-test: e2e-build-image e2e-ipam-components
 	$(info $(M) $(if $(filter $(E2E_DRYRUN), true),dry-,)running e2e tests$(if $(E2E_LABEL), labelled "$(E2E_LABEL)")$(if $(E2E_FOCUS), matching "$(E2E_FOCUS)"))
+	# Optional Nutanix vars may be empty (e.g. overlay subnet without PE cluster).
+	# Pass them explicitly so envsubst -no-unset succeeds; do not use -no-empty.
 	env CAPI_VERSION="$(CAPI_VERSION)" \
 	  E2E_IMAGE_TAG="$(E2E_IMAGE_TAG)" \
 	  E2E_PROVIDER_VERSION="$(E2E_PROVIDER_VERSION)" \
 	  E2E_IPAM_COMPONENTS="$(E2E_IPAM_COMPONENTS)" \
-	  envsubst -no-unset -no-empty -i '$(E2E_CONF_FILE)' -o '$(E2E_CONF_FILE_ENVSUBST)'
+	  NUTANIX_ENDPOINT="$(NUTANIX_ENDPOINT)" \
+	  NUTANIX_USERNAME="$(NUTANIX_USERNAME)" \
+	  NUTANIX_PASSWORD="$(NUTANIX_PASSWORD)" \
+	  NUTANIX_SUBNET="$(NUTANIX_SUBNET)" \
+	  NUTANIX_CLUSTER="$(NUTANIX_CLUSTER)" \
+	  NUTANIX_EXTERNAL_SUBNET="$(NUTANIX_EXTERNAL_SUBNET)" \
+	  NUTANIX_FLOATING_IP_PROJECT="$(NUTANIX_FLOATING_IP_PROJECT)" \
+	  NUTANIX_PRIVATE_SUBNET="$(NUTANIX_PRIVATE_SUBNET)" \
+	  envsubst -no-unset -i '$(E2E_CONF_FILE)' -o '$(E2E_CONF_FILE_ENVSUBST)'
 	CGO_ENABLED=0 go run github.com/onsi/ginkgo/v2/ginkgo run \
 		--r \
 		--show-node-events \
@@ -242,9 +252,9 @@ go-generate: ; $(info $(M) running go generate)
 	go generate -x ./...
 	controller-gen paths="./..." \
 		rbac:headerFile="hack/license-header.yaml.txt",roleName=manager-role
-	controller-gen paths="./api/v1alpha1" \
+	controller-gen paths="./api/..." \
 	  object:headerFile="hack/license-header.go.txt" \
-	  crd:headerFile=hack/license-header.yaml.txt \
+	  crd:headerFile=hack/license-header.yaml.txt,crdVersions=v1,generateEmbeddedObjectMeta=true \
 		output:crd:dir=config/crd/bases
 	controller-gen paths="./..." \
 	  webhook:headerFile="hack/license-header.yaml.txt"

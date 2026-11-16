@@ -26,6 +26,7 @@ func GetClient(params CachedClientParams) (Client, error) {
 type Client interface {
 	Networking() NetworkingClient
 	Cluster() ClusterClient
+	FloatingIPs() FloatingIPsClient
 }
 
 type client struct {

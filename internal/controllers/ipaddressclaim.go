@@ -34,14 +34,14 @@ import (
 
 	"github.com/nutanix-cloud-native/prism-go-client/environment/credentials"
 
-	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha1"
+	v1alpha2 "github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha2"
 	pcclient "github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/index"
 )
 
 type genericNutanixIPPool interface {
 	ctrlclient.Object
-	PoolSpec() *v1alpha1.NutanixIPPoolSpec
+	PoolSpec() *v1alpha2.NutanixIPPoolSpec
 }
 
 // NutanixProviderAdapter is used as middle layer for provider integration.
@@ -125,20 +125,20 @@ func (i *NutanixProviderAdapter) SetupWithManager(_ context.Context, b *ctrl.Bui
 		For(&ipamv1.IPAddressClaim{}, builder.WithPredicates(
 			predicate.Or(
 				ipampredicates.ClaimReferencesPoolKind(metav1.GroupKind{
-					Group: v1alpha1.GroupVersion.Group,
-					Kind:  v1alpha1.NutanixIPPoolKind,
+					Group: v1alpha2.GroupVersion.Group,
+					Kind:  v1alpha2.NutanixIPPoolKind,
 				}),
 			),
 		)).
 		Watches(
-			&v1alpha1.NutanixIPPool{},
-			handler.EnqueueRequestsFromMapFunc(i.ipPoolToIPClaims(v1alpha1.NutanixIPPoolKind)),
+			&v1alpha2.NutanixIPPool{},
+			handler.EnqueueRequestsFromMapFunc(i.ipPoolToIPClaims(v1alpha2.NutanixIPPoolKind)),
 			builder.WithPredicates(resourceUnpaused()),
 		).
 		Owns(&ipamv1.IPAddress{}, builder.WithPredicates(
 			ipampredicates.AddressReferencesPoolKind(metav1.GroupKind{
-				Group: v1alpha1.GroupVersion.Group,
-				Kind:  v1alpha1.NutanixIPPoolKind,
+				Group: v1alpha2.GroupVersion.Group,
+				Kind:  v1alpha2.NutanixIPPoolKind,
 			}),
 		)).
 		WithOptions(
@@ -170,7 +170,7 @@ func (i *NutanixProviderAdapter) ipPoolToIPClaims(
 				"index.poolRef": index.IPPoolRefValue(ipamv1.IPPoolReference{
 					Name:     pool.GetName(),
 					Kind:     kind,
-					APIGroup: v1alpha1.GroupVersion.Group,
+					APIGroup: v1alpha2.GroupVersion.Group,
 				}),
 			},
 			ctrlclient.InNamespace(pool.GetNamespace()),
@@ -217,8 +217,8 @@ func (i *NutanixProviderAdapter) ClaimHandlerFor(
 func (h *IPAddressClaimHandler) FetchPool(
 	ctx context.Context,
 ) (ctrlclient.Object, *ctrl.Result, error) {
-	if h.claim.Spec.PoolRef.Kind == v1alpha1.NutanixIPPoolKind {
-		h.pool = &v1alpha1.NutanixIPPool{}
+	if h.claim.Spec.PoolRef.Kind == v1alpha2.NutanixIPPoolKind {
+		h.pool = &v1alpha2.NutanixIPPool{}
 		if err := h.client.Get(
 			ctx, types.NamespacedName{Namespace: h.claim.Namespace, Name: h.claim.Spec.PoolRef.Name}, h.pool,
 		); err != nil {
@@ -249,10 +249,11 @@ func (h *IPAddressClaimHandler) EnsureAddress(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Nutanix client: %w", err)
 	}
-	cluster := ptr.Deref(h.pool.PoolSpec().Cluster, "")
+	cluster := resourceIdentifierString(h.pool.PoolSpec().Cluster)
+	subnetRef := h.pool.PoolSpec().Subnet.String()
 	subnet, err := nutanixClient.Networking().GetSubnet(
 		ctx,
-		h.pool.PoolSpec().Subnet,
+		subnetRef,
 		pcclient.GetSubnetOpts{Cluster: cluster},
 	)
 	if err != nil {
@@ -264,7 +265,7 @@ func (h *IPAddressClaimHandler) EnsureAddress(
 	reservedIPs, err := nutanixClient.Networking().ReserveIPs(
 		ctx,
 		pcclient.ReserveIPCountFunc(1),
-		h.pool.PoolSpec().Subnet,
+		subnetRef,
 		pcclient.ReserveIPOpts{
 			Cluster:       cluster,
 			ClientContext: string(h.claim.UID),
@@ -312,9 +313,9 @@ func (h *IPAddressClaimHandler) ReleaseAddress(ctx context.Context) (*ctrl.Resul
 	unreservedIPs, err := nutanixClient.Networking().UnreserveIPs(
 		ctx,
 		pcclient.UnreserveIPClientContext(string(h.claim.UID)),
-		h.pool.PoolSpec().Subnet,
+		h.pool.PoolSpec().Subnet.String(),
 		pcclient.UnreserveIPOpts{
-			Cluster: ptr.Deref(h.pool.PoolSpec().Cluster, ""),
+			Cluster: resourceIdentifierString(h.pool.PoolSpec().Cluster),
 		},
 	)
 	if err != nil {

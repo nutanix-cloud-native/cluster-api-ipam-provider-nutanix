@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -42,7 +43,7 @@ import (
 	"github.com/nutanix-cloud-native/prism-go-client/environment/credentials"
 	"github.com/nutanix-cloud-native/prism-go-client/environment/types"
 
-	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha1"
+	v1alpha2 "github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha2"
 	pcclient "github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
 )
 
@@ -139,6 +140,22 @@ var _ = Describe("CAIPAMX", func() {
 		},
 		SpecTimeout(10*time.Minute),
 	)
+
+	It(
+		"allocates and releases a FloatingIPClaim through Prism Central",
+		func(ctx SpecContext) {
+			allocateAndReleaseFloatingIPClaim(ctx, &cfg, bootstrapClusterProxy.GetClient())
+		},
+		SpecTimeout(10*time.Minute),
+	)
+
+	It(
+		"associates, unbinds, and rebinds a FloatingIP through Prism Central",
+		func(ctx SpecContext) {
+			associateUnbindAndRebindFloatingIP(ctx, &cfg, bootstrapClusterProxy.GetClient())
+		},
+		SpecTimeout(15*time.Minute),
+	)
 })
 
 func reserveAndUnreserveIPAddressClaim(
@@ -156,7 +173,7 @@ func reserveAndUnreserveIPAddressClaim(
 	}
 
 	secret := credentialsSecret(namespace.Name, cfg)
-	pool := nutanixIPPool(namespace.Name, cfg)
+	pool := nutanixIPPool(namespace.Name, cfg, poolSubnetIdentifier(ctx, cfg, cfg.Subnet))
 	claim := ipAddressClaim(namespace.Name, pool.Name)
 	var claimUID string
 	reservationReleased := false
@@ -200,13 +217,16 @@ func reserveAndUnreserveIPAddressClaim(
 }
 
 type testConfig struct {
-	Address  string
-	Port     uint16
-	Subnet   string
-	Cluster  string
-	Username string
-	Password string
-	Insecure bool
+	Address           string
+	Port              uint16
+	Subnet            string
+	Cluster           string
+	Username          string
+	Password          string
+	Insecure          bool
+	ExternalSubnet    string
+	FloatingIPProject string
+	PrivateSubnet     string
 }
 
 func loadE2EConfig(configPath string) *capiclusterctl.E2EConfig {
@@ -300,22 +320,40 @@ func loadConfig(variables map[string]string) (cfg testConfig, missing []string) 
 		return testConfig{}, nil
 	}
 
+	privateSubnet := variables["NUTANIX_PRIVATE_SUBNET"]
+	if privateSubnet == "" {
+		privateSubnet = variables["NUTANIX_SUBNET"]
+	}
+
 	return testConfig{
-		Address:  endpoint.Hostname(),
-		Port:     uint16(parsedPort),
-		Subnet:   variables["NUTANIX_SUBNET"],
-		Cluster:  variables["NUTANIX_CLUSTER"],
-		Username: variables["NUTANIX_USER"],
-		Password: variables["NUTANIX_PASSWORD"],
-		Insecure: strings.EqualFold(variables["NUTANIX_INSECURE"], "true"),
+		Address:           endpoint.Hostname(),
+		Port:              uint16(parsedPort),
+		Subnet:            variables["NUTANIX_SUBNET"],
+		Cluster:           variables["NUTANIX_CLUSTER"],
+		Username:          variables["NUTANIX_USER"],
+		Password:          variables["NUTANIX_PASSWORD"],
+		Insecure:          strings.EqualFold(variables["NUTANIX_INSECURE"], "true"),
+		ExternalSubnet:    variables["NUTANIX_EXTERNAL_SUBNET"],
+		FloatingIPProject: variables["NUTANIX_FLOATING_IP_PROJECT"],
+		PrivateSubnet:     privateSubnet,
 	}, nil
+}
+
+func requireFloatingIPConfig(cfg *testConfig) {
+	if cfg.ExternalSubnet != "" {
+		return
+	}
+	message := "missing required floating-IP e2e config variable: NUTANIX_EXTERNAL_SUBNET"
+	if env("E2E_REQUIRE_NUTANIX_ENV") == "true" {
+		Fail(message)
+	}
+	Skip(message)
 }
 
 func missingConfigVariables(variables map[string]string) []string {
 	requiredVariables := []string{
 		"NUTANIX_ENDPOINT",
 		"NUTANIX_SUBNET",
-		"NUTANIX_CLUSTER",
 		"NUTANIX_USER",
 		"NUTANIX_PASSWORD",
 	}
@@ -357,25 +395,59 @@ func credentialsSecret(namespace string, cfg *testConfig) corev1.Secret {
 	}
 }
 
-func nutanixIPPool(namespace string, cfg *testConfig) v1alpha1.NutanixIPPool {
-	return v1alpha1.NutanixIPPool{
+func nutanixIPPool(
+	namespace string,
+	cfg *testConfig,
+	subnet v1alpha2.NutanixResourceIdentifier,
+) v1alpha2.NutanixIPPool {
+	pool := v1alpha2.NutanixIPPool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "e2e-pool",
 			Namespace: namespace,
 		},
-		Spec: v1alpha1.NutanixIPPoolSpec{
-			PrismCentral: v1alpha1.PrismCentral{
+		Spec: v1alpha2.NutanixIPPoolSpec{
+			PrismCentral: v1alpha2.PrismCentral{
 				Address: cfg.Address,
 				Port:    cfg.Port,
-				CredentialsSecretRef: v1alpha1.LocalSecretRef{
+				CredentialsSecretRef: v1alpha2.LocalSecretRef{
 					Name: "pc-creds-for-ipam",
 				},
 				Insecure: cfg.Insecure,
 			},
-			Subnet:  cfg.Subnet,
-			Cluster: ptr.To(cfg.Cluster),
+			Subnet: subnet,
 		},
 	}
+	if cfg.Cluster != "" {
+		pool.Spec.Cluster = ptr.To(nutanixResourceIdentifier(cfg.Cluster))
+	}
+	return pool
+}
+
+func nutanixResourceIdentifier(nameOrID string) v1alpha2.NutanixResourceIdentifier {
+	if _, err := uuid.Parse(nameOrID); err == nil {
+		return v1alpha2.NewNutanixResourceIdentifierUUID(nameOrID)
+	}
+	return v1alpha2.NewNutanixResourceIdentifierName(nameOrID)
+}
+
+// poolSubnetIdentifier returns a subnet identifier. Named subnets require a cluster
+// for CRD validation; when NUTANIX_CLUSTER is empty (overlay), resolve the name to a UUID.
+func poolSubnetIdentifier(
+	ctx context.Context,
+	cfg *testConfig,
+	subnetNameOrID string,
+) v1alpha2.NutanixResourceIdentifier {
+	id := nutanixResourceIdentifier(subnetNameOrID)
+	if id.IsUUID() || cfg.Cluster != "" {
+		return id
+	}
+	subnet, err := newE2EPrismClient(cfg).Networking().GetSubnet(
+		ctx,
+		subnetNameOrID,
+		pcclient.GetSubnetOpts{},
+	)
+	Expect(err).NotTo(HaveOccurred(), "resolve subnet %q", subnetNameOrID)
+	return v1alpha2.NewNutanixResourceIdentifierUUID(subnet.ExtID().String())
 }
 
 func ipAddressClaim(namespace, poolName string) ipamv1.IPAddressClaim {
@@ -386,8 +458,8 @@ func ipAddressClaim(namespace, poolName string) ipamv1.IPAddressClaim {
 		},
 		Spec: ipamv1.IPAddressClaimSpec{
 			PoolRef: ipamv1.IPPoolReference{
-				APIGroup: v1alpha1.GroupVersion.Group,
-				Kind:     v1alpha1.NutanixIPPoolKind,
+				APIGroup: v1alpha2.GroupVersion.Group,
+				Kind:     v1alpha2.NutanixIPPoolKind,
 				Name:     poolName,
 			},
 		},
@@ -398,7 +470,7 @@ func initScheme() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(ipamv1.AddToScheme(scheme))
-	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(v1alpha2.AddToScheme(scheme))
 	return scheme
 }
 
@@ -503,6 +575,15 @@ func cleanupNutanixReservation(
 	cfg *testConfig,
 	clientContext string,
 ) {
+	cleanupNutanixReservationForSubnet(ctx, cfg, cfg.Subnet, clientContext)
+}
+
+func cleanupNutanixReservationForSubnet(
+	ctx context.Context,
+	cfg *testConfig,
+	subnet string,
+	clientContext string,
+) {
 	endpoint := &url.URL{
 		Scheme: "https",
 		Host:   net.JoinHostPort(cfg.Address, strconv.Itoa(int(cfg.Port))),
@@ -530,7 +611,7 @@ func cleanupNutanixReservation(
 	if _, err := nutanixClient.Networking().UnreserveIPs(
 		ctx,
 		pcclient.UnreserveIPClientContext(clientContext),
-		cfg.Subnet,
+		subnet,
 		pcclient.UnreserveIPOpts{
 			Cluster: cfg.Cluster,
 		},
@@ -611,6 +692,505 @@ func waitForIPAddressDeleted(
 		return false, nil
 	}); err != nil {
 		Fail(fmt.Sprintf("wait for IPAddress %s/%s to be deleted: %v", namespace, name, err))
+	}
+}
+
+func allocateAndReleaseFloatingIPClaim(
+	ctx context.Context,
+	cfg *testConfig,
+	k8sClient ctrlclient.Client,
+) {
+	requireFloatingIPConfig(cfg)
+
+	namespace := corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "caipamx-fip-e2e-",
+		},
+	}
+	Expect(k8sClient.Create(ctx, &namespace)).To(Succeed())
+
+	secret := credentialsSecret(namespace.Name, cfg)
+	pool := nutanixFloatingIPPool(
+		namespace.Name,
+		cfg,
+		poolSubnetIdentifier(ctx, cfg, cfg.ExternalSubnet),
+	)
+	claim := floatingIPClaim(namespace.Name, pool.Name)
+	var allocatedExtID string
+	released := false
+
+	DeferCleanup(func(ctx context.Context) {
+		cleanupCtx, cleanupCancel := context.WithTimeout(ctx, 5*time.Minute)
+		defer cleanupCancel()
+		logFloatingIPResources(cleanupCtx, k8sClient, namespace.Name, "cleanup")
+		cleanupObject(cleanupCtx, k8sClient, &claim)
+		cleanupObject(cleanupCtx, k8sClient, &pool)
+		cleanupObject(cleanupCtx, k8sClient, &secret)
+		cleanupObject(cleanupCtx, k8sClient, &namespace)
+		if !released && allocatedExtID != "" {
+			cleanupPrismFloatingIP(cleanupCtx, cfg, allocatedExtID)
+		}
+	}, NodeTimeout(5*time.Minute))
+
+	Expect(k8sClient.Create(ctx, &secret)).To(Succeed())
+	Expect(k8sClient.Create(ctx, &pool)).To(Succeed())
+	Expect(k8sClient.Create(ctx, &claim)).To(Succeed())
+	logFloatingIPResources(ctx, k8sClient, namespace.Name, "created")
+
+	fip := waitForFloatingIPAllocated(ctx, k8sClient, namespace.Name, claim.Name)
+	allocatedExtID = fip.Spec.ExtID
+	GinkgoWriter.Printf(
+		"allocated floating IP %s (%s) through FloatingIPClaim %s/%s\n",
+		fip.Spec.Address,
+		fip.Spec.ExtID,
+		claim.Namespace,
+		claim.Name,
+	)
+	logFloatingIPResources(ctx, k8sClient, namespace.Name, "allocated")
+
+	prismFIP := getPrismFloatingIP(ctx, cfg, fip.Spec.ExtID)
+	Expect(prismFIP.Address).To(Equal(fip.Spec.Address))
+
+	Expect(k8sClient.Delete(ctx, &claim)).To(Succeed())
+	waitForFloatingIPDeleted(ctx, k8sClient, namespace.Name, claim.Name)
+	Eventually(func(g Gomega) {
+		_, err := newE2EPrismClient(cfg).FloatingIPs().Get(ctx, allocatedExtID)
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(strings.Contains(strings.ToLower(err.Error()), "not found") ||
+			strings.Contains(err.Error(), "ENTITY_NOT_FOUND") ||
+			strings.Contains(
+				err.Error(),
+				"does not exist",
+			)).To(BeTrue(), "unexpected get error: %v", err)
+	}).WithTimeout(2 * time.Minute).WithPolling(time.Second).Should(Succeed())
+	released = true
+}
+
+func associateUnbindAndRebindFloatingIP(
+	ctx context.Context,
+	cfg *testConfig,
+	k8sClient ctrlclient.Client,
+) {
+	requireFloatingIPConfig(cfg)
+
+	namespace := corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "caipamx-fip-bind-e2e-",
+		},
+	}
+	Expect(k8sClient.Create(ctx, &namespace)).To(Succeed())
+
+	secret := credentialsSecret(namespace.Name, cfg)
+	pool := nutanixFloatingIPPool(
+		namespace.Name,
+		cfg,
+		poolSubnetIdentifier(ctx, cfg, cfg.ExternalSubnet),
+	)
+	claim := floatingIPClaim(namespace.Name, pool.Name)
+	clientContext := fmt.Sprintf("caipamx-e2e-fip-%d", time.Now().UnixNano())
+	var allocatedExtID string
+	privateReserved := false
+	var privateIP string
+	released := false
+
+	DeferCleanup(func(ctx context.Context) {
+		cleanupCtx, cleanupCancel := context.WithTimeout(ctx, 5*time.Minute)
+		defer cleanupCancel()
+		logFloatingIPResources(cleanupCtx, k8sClient, namespace.Name, "cleanup")
+		cleanupObject(cleanupCtx, k8sClient, &claim)
+		cleanupObject(cleanupCtx, k8sClient, &pool)
+		cleanupObject(cleanupCtx, k8sClient, &secret)
+		cleanupObject(cleanupCtx, k8sClient, &namespace)
+		if privateReserved {
+			cleanupNutanixReservationForSubnet(cleanupCtx, cfg, cfg.PrivateSubnet, clientContext)
+		}
+		if !released && allocatedExtID != "" {
+			cleanupPrismFloatingIP(cleanupCtx, cfg, allocatedExtID)
+		}
+	}, NodeTimeout(5*time.Minute))
+
+	prismClient := newE2EPrismClient(cfg)
+	privateSubnet, err := prismClient.Networking().GetSubnet(
+		ctx,
+		cfg.PrivateSubnet,
+		pcclient.GetSubnetOpts{Cluster: cfg.Cluster},
+	)
+	Expect(err).NotTo(HaveOccurred())
+	if privateSubnet.VPCExtID() == "" {
+		Skip(
+			fmt.Sprintf(
+				"private subnet %q has no VPC reference; skipping floating-IP association",
+				cfg.PrivateSubnet,
+			),
+		)
+	}
+
+	reserved, err := prismClient.Networking().ReserveIPs(
+		ctx,
+		pcclient.ReserveIPCountFunc(1),
+		privateSubnet.ExtID().String(),
+		pcclient.ReserveIPOpts{
+			ClientContext: clientContext,
+		},
+	)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(reserved).To(HaveLen(1))
+	privateReserved = true
+	privateIP = reserved[0].String()
+
+	Expect(k8sClient.Create(ctx, &secret)).To(Succeed())
+	Expect(k8sClient.Create(ctx, &pool)).To(Succeed())
+	Expect(k8sClient.Create(ctx, &claim)).To(Succeed())
+	logFloatingIPResources(ctx, k8sClient, namespace.Name, "created")
+
+	fip := waitForFloatingIPAllocated(ctx, k8sClient, namespace.Name, claim.Name)
+	allocatedExtID = fip.Spec.ExtID
+	logFloatingIPResources(ctx, k8sClient, namespace.Name, "allocated")
+
+	binding1 := floatingIPBinding(
+		namespace.Name,
+		"bind-1",
+		claim.Name,
+		privateIP,
+		privateSubnet.VPCExtID(),
+	)
+	Expect(k8sClient.Create(ctx, &binding1)).To(Succeed())
+	waitForFloatingIPAssociation(ctx, k8sClient, namespace.Name, claim.Name, privateIP)
+	logFloatingIPResources(ctx, k8sClient, namespace.Name, "associated")
+	prismFIP := getPrismFloatingIP(ctx, cfg, allocatedExtID)
+	Expect(prismFIP.AssociationType).To(Equal(pcclient.FloatingIPAssociationPrivateIP))
+	Expect(prismFIP.PrivateIPAddress).To(Equal(privateIP))
+
+	Expect(k8sClient.Delete(ctx, &binding1)).To(Succeed())
+	waitForFloatingIPReservationCleared(ctx, k8sClient, namespace.Name, claim.Name)
+	logFloatingIPResources(ctx, k8sClient, namespace.Name, "unbound")
+	Eventually(func(g Gomega) {
+		current := getPrismFloatingIP(ctx, cfg, allocatedExtID)
+		g.Expect(current.AssociationType).To(Equal(pcclient.FloatingIPAssociationNone))
+		g.Expect(current.ExtID).To(Equal(allocatedExtID))
+	}).WithTimeout(2 * time.Minute).WithPolling(time.Second).Should(Succeed())
+
+	binding2 := floatingIPBinding(
+		namespace.Name,
+		"bind-2",
+		claim.Name,
+		privateIP,
+		privateSubnet.VPCExtID(),
+	)
+	Expect(k8sClient.Create(ctx, &binding2)).To(Succeed())
+	waitForFloatingIPAssociation(ctx, k8sClient, namespace.Name, claim.Name, privateIP)
+	logFloatingIPResources(ctx, k8sClient, namespace.Name, "rebound")
+	prismFIP = getPrismFloatingIP(ctx, cfg, allocatedExtID)
+	Expect(prismFIP.AssociationType).To(Equal(pcclient.FloatingIPAssociationPrivateIP))
+	Expect(prismFIP.PrivateIPAddress).To(Equal(privateIP))
+
+	Expect(k8sClient.Delete(ctx, &binding2)).To(Succeed())
+	waitForFloatingIPReservationCleared(ctx, k8sClient, namespace.Name, claim.Name)
+	logFloatingIPResources(ctx, k8sClient, namespace.Name, "unbound-again")
+	Expect(k8sClient.Delete(ctx, &claim)).To(Succeed())
+	waitForFloatingIPDeleted(ctx, k8sClient, namespace.Name, claim.Name)
+	Eventually(func(g Gomega) {
+		_, err := newE2EPrismClient(cfg).FloatingIPs().Get(ctx, allocatedExtID)
+		g.Expect(err).To(HaveOccurred())
+	}).WithTimeout(2 * time.Minute).WithPolling(time.Second).Should(Succeed())
+	released = true
+}
+
+func nutanixFloatingIPPool(
+	namespace string,
+	cfg *testConfig,
+	subnet v1alpha2.NutanixResourceIdentifier,
+) v1alpha2.NutanixFloatingIPPool {
+	pool := v1alpha2.NutanixFloatingIPPool{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "e2e-fip-pool",
+			Namespace: namespace,
+		},
+		Spec: v1alpha2.NutanixFloatingIPPoolSpec{
+			PrismCentral: v1alpha2.PrismCentral{
+				Address: cfg.Address,
+				Port:    cfg.Port,
+				CredentialsSecretRef: v1alpha2.LocalSecretRef{
+					Name: "pc-creds-for-ipam",
+				},
+				Insecure: cfg.Insecure,
+			},
+			Subnet: subnet,
+		},
+	}
+	if cfg.Cluster != "" {
+		pool.Spec.Cluster = ptr.To(nutanixResourceIdentifier(cfg.Cluster))
+	}
+	if cfg.FloatingIPProject != "" {
+		pool.Spec.Project = ptr.To(nutanixResourceIdentifier(cfg.FloatingIPProject))
+	}
+	return pool
+}
+
+func floatingIPClaim(namespace, poolName string) v1alpha2.FloatingIPClaim {
+	return v1alpha2.FloatingIPClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "e2e-fip-claim",
+			Namespace: namespace,
+		},
+		Spec: v1alpha2.FloatingIPClaimSpec{
+			PoolRef: v1alpha2.FloatingIPPoolReference{
+				Name: poolName,
+			},
+		},
+	}
+}
+
+func floatingIPBinding(
+	namespace, name, floatingIPName, address, vpcExtID string,
+) v1alpha2.FloatingIPBinding {
+	return v1alpha2.FloatingIPBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: v1alpha2.FloatingIPBindingSpec{
+			FloatingIPRef: v1alpha2.LocalObjectReference{Name: floatingIPName},
+			PrivateIP: &v1alpha2.FloatingIPPrivateIPAssociation{
+				Address: address,
+				VPC:     nutanixResourceIdentifier(vpcExtID),
+			},
+		},
+	}
+}
+
+func newE2EPrismClient(cfg *testConfig) pcclient.Client {
+	endpoint := &url.URL{
+		Scheme: "https",
+		Host:   net.JoinHostPort(cfg.Address, strconv.Itoa(int(cfg.Port))),
+	}
+	nutanixClient, err := pcclient.GetClient(&e2eClientParams{
+		endpoint: endpoint,
+		username: cfg.Username,
+		password: cfg.Password,
+		insecure: cfg.Insecure,
+	})
+	Expect(err).NotTo(HaveOccurred())
+	return nutanixClient
+}
+
+func getPrismFloatingIP(ctx context.Context, cfg *testConfig, extID string) *pcclient.FloatingIP {
+	fip, err := newE2EPrismClient(cfg).FloatingIPs().Get(ctx, extID)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(fip).NotTo(BeNil())
+	return fip
+}
+
+func cleanupPrismFloatingIP(ctx context.Context, cfg *testConfig, extID string) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	if err := newE2EPrismClient(cfg).FloatingIPs().Delete(ctx, extID); err != nil {
+		GinkgoWriter.Printf("cleanup floating IP %q failed: %v\n", extID, err)
+	}
+}
+
+func waitForFloatingIPAllocated(
+	ctx context.Context,
+	k8sClient ctrlclient.Client,
+	namespace,
+	name string,
+) v1alpha2.FloatingIP {
+	var fip v1alpha2.FloatingIP
+	if err := wait.PollUntilContextTimeout(ctx, time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		err := k8sClient.Get(ctx, ctrlclient.ObjectKey{Namespace: namespace, Name: name}, &fip)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		return fip.Spec.ExtID != "" && fip.Spec.Address != "", nil
+	}); err != nil {
+		logFloatingIPResources(ctx, k8sClient, namespace, "wait-allocated-failed")
+		Fail(fmt.Sprintf("wait for FloatingIP %s/%s: %v", namespace, name, err))
+	}
+	return fip
+}
+
+func waitForFloatingIPDeleted(
+	ctx context.Context,
+	k8sClient ctrlclient.Client,
+	namespace,
+	name string,
+) {
+	if err := wait.PollUntilContextTimeout(ctx, time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		var fip v1alpha2.FloatingIP
+		err := k8sClient.Get(ctx, ctrlclient.ObjectKey{Namespace: namespace, Name: name}, &fip)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, err
+		}
+		return false, nil
+	}); err != nil {
+		logFloatingIPResources(ctx, k8sClient, namespace, "wait-deleted-failed")
+		Fail(fmt.Sprintf("wait for FloatingIP %s/%s to be deleted: %v", namespace, name, err))
+	}
+}
+
+func waitForFloatingIPAssociation(
+	ctx context.Context,
+	k8sClient ctrlclient.Client,
+	namespace,
+	name,
+	privateIP string,
+) {
+	if err := wait.PollUntilContextTimeout(ctx, time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		var fip v1alpha2.FloatingIP
+		err := k8sClient.Get(ctx, ctrlclient.ObjectKey{Namespace: namespace, Name: name}, &fip)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		if fip.Status.Association == nil {
+			return false, nil
+		}
+		if fip.Status.Association.Type != v1alpha2.FloatingIPAssociationPrivateIP {
+			return false, nil
+		}
+		if fip.Status.Association.PrivateIP == nil {
+			return false, nil
+		}
+		return fip.Status.Association.PrivateIP.Address == privateIP, nil
+	}); err != nil {
+		logFloatingIPResources(ctx, k8sClient, namespace, "wait-association-failed")
+		Fail(fmt.Sprintf("wait for FloatingIP %s/%s association: %v", namespace, name, err))
+	}
+}
+
+func waitForFloatingIPReservationCleared(
+	ctx context.Context,
+	k8sClient ctrlclient.Client,
+	namespace,
+	name string,
+) {
+	if err := wait.PollUntilContextTimeout(ctx, time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		var fip v1alpha2.FloatingIP
+		err := k8sClient.Get(ctx, ctrlclient.ObjectKey{Namespace: namespace, Name: name}, &fip)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		return fip.Status.Reservation == nil, nil
+	}); err != nil {
+		logFloatingIPResources(ctx, k8sClient, namespace, "wait-reservation-clear-failed")
+		Fail(fmt.Sprintf("wait for FloatingIP %s/%s reservation clear: %v", namespace, name, err))
+	}
+}
+
+func logFloatingIPResources(
+	ctx context.Context,
+	k8sClient ctrlclient.Client,
+	namespace, step string,
+) {
+	body := renderFloatingIPResources(ctx, k8sClient, namespace)
+	// GinkgoWriter is omitted from passing specs. Stdout is what the e2e log shows.
+	fmt.Fprintf(os.Stdout, "floating IP resources [%s] namespace=%s\n%s", step, namespace, body)
+	GinkgoWriter.Printf("floating IP resources [%s] namespace=%s\n%s", step, namespace, body)
+	if artifactsFolder == "" {
+		return
+	}
+
+	dir := filepath.Join(artifactsFolder, "floating-ip", namespace)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		GinkgoWriter.Printf("create floating IP resource log dir: %v\n", err)
+		return
+	}
+	path := filepath.Join(dir, step+".yaml")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		GinkgoWriter.Printf("write floating IP resource log %s: %v\n", path, err)
+	}
+}
+
+func renderFloatingIPResources(
+	ctx context.Context,
+	k8sClient ctrlclient.Client,
+	namespace string,
+) string {
+	var buf strings.Builder
+	writeFloatingIPList(&buf, "NutanixFloatingIPPool", func() ([]ctrlclient.Object, error) {
+		list := &v1alpha2.NutanixFloatingIPPoolList{}
+		if err := k8sClient.List(ctx, list, ctrlclient.InNamespace(namespace)); err != nil {
+			return nil, err
+		}
+		objects := make([]ctrlclient.Object, len(list.Items))
+		for i := range list.Items {
+			objects[i] = &list.Items[i]
+		}
+		return objects, nil
+	})
+	writeFloatingIPList(&buf, "FloatingIPClaim", func() ([]ctrlclient.Object, error) {
+		list := &v1alpha2.FloatingIPClaimList{}
+		if err := k8sClient.List(ctx, list, ctrlclient.InNamespace(namespace)); err != nil {
+			return nil, err
+		}
+		objects := make([]ctrlclient.Object, len(list.Items))
+		for i := range list.Items {
+			objects[i] = &list.Items[i]
+		}
+		return objects, nil
+	})
+	writeFloatingIPList(&buf, "FloatingIP", func() ([]ctrlclient.Object, error) {
+		list := &v1alpha2.FloatingIPList{}
+		if err := k8sClient.List(ctx, list, ctrlclient.InNamespace(namespace)); err != nil {
+			return nil, err
+		}
+		objects := make([]ctrlclient.Object, len(list.Items))
+		for i := range list.Items {
+			objects[i] = &list.Items[i]
+		}
+		return objects, nil
+	})
+	writeFloatingIPList(&buf, "FloatingIPBinding", func() ([]ctrlclient.Object, error) {
+		list := &v1alpha2.FloatingIPBindingList{}
+		if err := k8sClient.List(ctx, list, ctrlclient.InNamespace(namespace)); err != nil {
+			return nil, err
+		}
+		objects := make([]ctrlclient.Object, len(list.Items))
+		for i := range list.Items {
+			objects[i] = &list.Items[i]
+		}
+		return objects, nil
+	})
+	return buf.String()
+}
+
+func writeFloatingIPList(
+	buf *strings.Builder,
+	kind string,
+	list func() ([]ctrlclient.Object, error),
+) {
+	objects, err := list()
+	if err != nil {
+		fmt.Fprintf(buf, "# list %s: %v\n", kind, err)
+		return
+	}
+	if len(objects) == 0 {
+		fmt.Fprintf(buf, "# no %s\n", kind)
+		return
+	}
+	for _, obj := range objects {
+		obj.SetManagedFields(nil)
+		raw, err := yaml.Marshal(obj)
+		if err != nil {
+			fmt.Fprintf(buf, "# marshal %s %s: %v\n", kind, obj.GetName(), err)
+			continue
+		}
+		buf.WriteString("---\n")
+		buf.Write(raw)
+		if len(raw) == 0 || raw[len(raw)-1] != '\n' {
+			buf.WriteByte('\n')
+		}
 	}
 }
 
