@@ -318,6 +318,7 @@ const (
 	ReasonPoolExhausted   = "SubnetPoolExhausted"
 	ReasonRateLimited     = "PrismCentralRateLimited"
 	ReasonReserveFailed   = "ReservationFailed"
+	ReasonCredentialsGone = "PrismCentralCredentialsGone"
 )
 
 // retryAfterUnavailable is how long to wait before asking Prism Central again
@@ -410,6 +411,37 @@ func (h *IPAddressClaimHandler) ReleaseAddress(ctx context.Context) (*ctrl.Resul
 
 	nutanixClient, err := h.getClient()
 	if err != nil {
+		// The Prism Central credentials live in a Secret in the cluster's
+		// namespace, which is deleted along with the cluster. Once it is gone
+		// this controller can never build a client again, so retrying cannot
+		// release the address: it only wedges the claim, the pool holding it
+		// open and the namespace behind a finalizer that will never clear.
+		//
+		// Observed on a live cluster: the secret went with the cluster and the
+		// claim then retried "secret not found" every ten seconds forever.
+		//
+		// Record it, say plainly that the address may still be reserved, and
+		// let the object go. CAREN's cluster-level sweep runs during
+		// BeforeClusterDelete, while the secret still exists, and is the
+		// designed backstop for exactly this.
+		if apierrors.IsNotFound(err) {
+			meta.SetStatusCondition(&h.claim.Status.Conditions, metav1.Condition{
+				Type:   ReadyCondition,
+				Status: metav1.ConditionFalse,
+				Reason: ReasonCredentialsGone,
+				Message: fmt.Sprintf(
+					"Cannot release the address: %v. It may remain reserved on Prism Central.",
+					err,
+				),
+			})
+			log.FromContext(ctx).Error(err,
+				"Prism Central credentials are gone, so the address cannot be released here; "+
+					"allowing the claim to be deleted rather than blocking it forever",
+				"claim", fmt.Sprintf("%s/%s", h.claim.Namespace, h.claim.Name),
+				"clientContext", string(h.claim.UID),
+			)
+			return nil, nil
+		}
 		return nil, fmt.Errorf("failed to get Nutanix client: %w", err)
 	}
 

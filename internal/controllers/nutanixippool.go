@@ -7,11 +7,14 @@ import (
 	"context"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/types"
 	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha1"
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/index"
@@ -47,8 +50,31 @@ type NutanixIPPoolReconciler struct {
 func (r *NutanixIPPoolReconciler) SetupWithManager(_ context.Context, mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.NutanixIPPool{}).
+		// A pool being deleted waits for its claims to go. Nothing else would
+		// bring it back here when the last one does, so watch the claims: the
+		// pool is only let go on the reconcile that follows their removal.
+		Watches(
+			&ipamv1.IPAddressClaim{},
+			handler.EnqueueRequestsFromMapFunc(claimToPool),
+		).
 		Named("nutanixippool").
 		Complete(r)
+}
+
+// claimToPool maps a claim back to the NutanixIPPool it draws from, so the pool
+// is reconciled when the claim appears or goes away.
+func claimToPool(_ context.Context, obj ctrlclient.Object) []reconcile.Request {
+	claim, ok := obj.(*ipamv1.IPAddressClaim)
+	if !ok {
+		return nil
+	}
+	ref := claim.Spec.PoolRef
+	if ref.Kind != v1alpha1.NutanixIPPoolKind || ref.APIGroup != v1alpha1.GroupVersion.Group {
+		return nil
+	}
+	return []reconcile.Request{{
+		NamespacedName: types.NamespacedName{Namespace: claim.Namespace, Name: ref.Name},
+	}}
 }
 
 func (r *NutanixIPPoolReconciler) Reconcile(
@@ -78,9 +104,9 @@ func (r *NutanixIPPoolReconciler) Reconcile(
 		return ctrl.Result{}, err
 	}
 	if claims > 0 {
-		// Hold the pool. The claim reconciler is releasing those addresses and
-		// each release deletes a claim, which wakes this controller again, so
-		// there is no need to poll.
+		// Hold the pool. The claim reconciler is releasing those addresses, and
+		// the watch on claims brings the pool back here when the last one is
+		// removed, so there is no need to poll.
 		logger.Info("Pool is deleting but addresses are still allocated from it; holding it open",
 			"claims", claims)
 		return ctrl.Result{}, nil
