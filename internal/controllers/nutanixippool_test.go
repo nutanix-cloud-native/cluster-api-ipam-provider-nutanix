@@ -13,11 +13,13 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/api/v1alpha1"
 	"github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/index"
@@ -257,4 +259,38 @@ func TestReservationFailedSurfacesUnknownErrors(t *testing.T) {
 	cond := meta.FindStatusCondition(h.claim.Status.Conditions, ReadyCondition)
 	g.Expect(cond).NotTo(BeNil())
 	g.Expect(cond.Reason).To(Equal(ReasonReserveFailed))
+}
+
+// The regression: a pool being deleted waits for its claims, and nothing
+// brought it back here when the last claim went, so it sat holding its
+// finalizer forever.
+func TestClaimToPoolMapping(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a claim maps to the pool it draws from", func(t *testing.T) {
+		t.Parallel()
+		reqs := claimToPool(context.Background(), testClaim("c"))
+		NewWithT(t).Expect(reqs).To(Equal([]reconcile.Request{{
+			NamespacedName: types.NamespacedName{Namespace: poolNamespace, Name: poolTestName},
+		}}))
+	})
+
+	t.Run("a claim against another kind of pool is ignored", func(t *testing.T) {
+		t.Parallel()
+		claim := testClaim("c")
+		claim.Spec.PoolRef.Kind = "InClusterIPPool"
+		NewWithT(t).Expect(claimToPool(context.Background(), claim)).To(BeEmpty())
+	})
+
+	t.Run("a claim from another API group is ignored", func(t *testing.T) {
+		t.Parallel()
+		claim := testClaim("c")
+		claim.Spec.PoolRef.APIGroup = "example.com"
+		NewWithT(t).Expect(claimToPool(context.Background(), claim)).To(BeEmpty())
+	})
+
+	t.Run("a non-claim object is ignored", func(t *testing.T) {
+		t.Parallel()
+		NewWithT(t).Expect(claimToPool(context.Background(), testPool(false))).To(BeEmpty())
+	})
 }
