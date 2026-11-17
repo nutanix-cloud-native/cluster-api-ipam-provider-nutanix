@@ -5,10 +5,12 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -157,4 +159,102 @@ func TestNutanixIPPoolReconciler(t *testing.T) {
 		t.Parallel()
 		reconcilePool(t, poolClient(t))
 	})
+}
+
+// The reservation failures that must not be retried hard: an exhausted subnet
+// will not refill in the controller's 500ms backoff floor, and retrying into
+// Prism Central's rate limit is how one stuck claim starts failing reservations
+// for every other cluster sharing that Prism Central.
+func TestClassifyReserveError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		err        error
+		wantReason string
+		wantWait   bool
+	}{
+		{
+			// Verbatim from a live Prism Central with a full pool.
+			name: "an exhausted subnet pool waits",
+			err: errors.New(`task failed: {"legacyErrorMessage":"Failed to issue ` +
+				`NetworkReserveIp RPC: kAddressPoolExhausted: Could not get free IP address ` +
+				`for network d4ade013-d1d1-4eac-9ab8-cdcc91ad4cec."}`),
+			wantReason: ReasonPoolExhausted,
+			wantWait:   true,
+		},
+		{
+			// Verbatim from the same run, one second later.
+			name: "a rate limited Prism Central waits",
+			err: errors.New(`{"message":"Failed to perform the operation as rate limit ` +
+				`set by the API has been exceeded.","code":"PLAT-10003",` +
+				`"errorGroup":"RATE_LIMIT_EXCEEDED"}`),
+			wantReason: ReasonRateLimited,
+			wantWait:   true,
+		},
+		{
+			name:       "the rate limit is recognised by its error group too",
+			err:        errors.New("something: RATE_LIMIT_EXCEEDED"),
+			wantReason: ReasonRateLimited,
+			wantWait:   true,
+		},
+		{
+			// Anything else may be transient and worth retrying promptly.
+			name:       "an unknown failure is retried as an error",
+			err:        errors.New("connection reset by peer"),
+			wantReason: ReasonReserveFailed,
+			wantWait:   false,
+		},
+		{
+			name:       "a missing subnet is not something waiting fixes, so it surfaces",
+			err:        errors.New("NETWORKING-10060 Existing subnet is not found"),
+			wantReason: ReasonReserveFailed,
+			wantWait:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			g := NewWithT(t)
+			reason, wait := classifyReserveError(tt.err)
+			g.Expect(reason).To(Equal(tt.wantReason))
+			g.Expect(wait).To(Equal(tt.wantWait))
+		})
+	}
+}
+
+// A failure must leave a reason on the claim: before this, an exhausted pool was
+// visible only in this controller's log, so a cluster waiting on the address
+// hung with nothing explaining why.
+func TestReservationFailedRecordsAReason(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	h := &IPAddressClaimHandler{claim: &ipamv1.IPAddressClaim{}}
+	res, err := h.reservationFailed(context.Background(),
+		errors.New("task failed: kAddressPoolExhausted: Could not get free IP address"))
+
+	g.Expect(err).NotTo(HaveOccurred(), "an exhausted pool must not be retried hard")
+	g.Expect(res).NotTo(BeNil())
+	g.Expect(res.RequeueAfter).To(Equal(retryAfterUnavailable))
+
+	cond := meta.FindStatusCondition(h.claim.Status.Conditions, ReadyCondition)
+	g.Expect(cond).NotTo(BeNil(), "the claim must say why it has no address")
+	g.Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+	g.Expect(cond.Reason).To(Equal(ReasonPoolExhausted))
+	g.Expect(cond.Message).To(ContainSubstring("kAddressPoolExhausted"))
+}
+
+func TestReservationFailedSurfacesUnknownErrors(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	h := &IPAddressClaimHandler{claim: &ipamv1.IPAddressClaim{}}
+	_, err := h.reservationFailed(context.Background(), errors.New("connection reset by peer"))
+
+	g.Expect(err).To(HaveOccurred(), "an unclassified failure must still be reported")
+	cond := meta.FindStatusCondition(h.claim.Status.Conditions, ReadyCondition)
+	g.Expect(cond).NotTo(BeNil())
+	g.Expect(cond.Reason).To(Equal(ReasonReserveFailed))
 }
