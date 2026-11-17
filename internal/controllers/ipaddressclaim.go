@@ -286,6 +286,20 @@ func (h *IPAddressClaimHandler) ReleaseAddress(ctx context.Context) (*ctrl.Resul
 		return nil, nil
 	}
 
+	// The reconciler calls this even when FetchPool failed, which the
+	// ClaimHandler contract spells out, so the pool may be nil. Everything
+	// below needs it: it carries the Prism Central to talk to and the subnet to
+	// release on. Returning an error keeps the claim's finalizer in place and
+	// retries, rather than dereferencing nil and dropping the address on the
+	// floor. ProtectPoolFinalizer is what stops this happening at all.
+	if h.pool == nil {
+		return nil, fmt.Errorf(
+			"cannot release the address for IPAddressClaim %s/%s: its NutanixIPPool %q is gone, "+
+				"so the Prism Central and subnet to release on are unknown",
+			h.claim.Namespace, h.claim.Name, h.claim.Spec.PoolRef.Name,
+		)
+	}
+
 	var address ipamv1.IPAddress
 	if err := h.client.Get(
 		ctx,

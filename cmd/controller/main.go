@@ -178,6 +178,15 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "IPAddressClaim")
 		os.Exit(1)
 	}
+	// Holds a pool open until the addresses taken from it are released, so a
+	// deleted cluster cannot garbage-collect the pool out from under its own
+	// claims and strand their reservations on Prism Central.
+	if err = (&controllers.NutanixIPPoolReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(signalCtx, mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "NutanixIPPool")
+		os.Exit(1)
+	}
 	if err := mgr.Start(signalCtx); err != nil {
 		setupLog.Error(err, "unable to start controller manager")
 		os.Exit(1)
