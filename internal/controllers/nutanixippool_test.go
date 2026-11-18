@@ -9,12 +9,17 @@ import (
 	"testing"
 	"time"
 
+	pcclient "github.com/nutanix-cloud-native/cluster-api-ipam-provider-nutanix/internal/client"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/informers"
+	coreinformers "k8s.io/client-go/informers/core/v1"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
 	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -293,4 +298,121 @@ func TestClaimToPoolMapping(t *testing.T) {
 		t.Parallel()
 		NewWithT(t).Expect(claimToPool(context.Background(), testPool(false))).To(BeEmpty())
 	})
+}
+
+// poolWithCredentials reaches the Prism Central credentials lookup in
+// getClient, which is where a deleted cluster's missing Secret surfaces.
+func poolWithCredentials() *v1alpha1.NutanixIPPool {
+	pool := testPool(false)
+	pool.Spec.PrismCentral = v1alpha1.PrismCentral{
+		Address:              "pc.example.com",
+		Port:                 9440,
+		Insecure:             true,
+		CredentialsSecretRef: v1alpha1.LocalSecretRef{Name: "workload-pc-credentials"},
+	}
+	return pool
+}
+
+// emptySecretInformer has no Secrets, so the credentials lookup returns
+// NotFound - exactly what a deleted cluster leaves behind.
+func emptySecretInformer() coreinformers.SecretInformer {
+	return informers.NewSharedInformerFactory(k8sfake.NewClientset(), 0).Core().V1().Secrets()
+}
+
+// secretInformerWith holds the credentials Secret, so the lookup succeeds and
+// the failure under test comes from building the client instead.
+func secretInformerWith(secret *corev1.Secret) coreinformers.SecretInformer {
+	si := informers.NewSharedInformerFactory(k8sfake.NewClientset(secret), 0).Core().V1().Secrets()
+	utilruntime.Must(si.Informer().GetIndexer().Add(secret))
+	return si
+}
+
+func transientSecret() *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "workload-pc-credentials", Namespace: poolNamespace},
+		Data: map[string][]byte{
+			"credentials": []byte(
+				`[{"type":"basic_auth","data":{"prismCentral":{"username":"u","password":"p"}}}]`,
+			),
+		},
+	}
+}
+
+// ReleaseAddress is called even when FetchPool failed, which the ClaimHandler
+// contract spells out, so the pool can be nil. It must fail loudly and keep the
+// finalizer rather than dereference nil and drop a reserved address.
+func TestReleaseAddressWithoutAPoolFails(t *testing.T) {
+	g := NewWithT(t)
+
+	claim := testClaim("claim-no-pool")
+	claim.Status.AddressRef = ipamv1.IPAddressReference{Name: "addr-1"}
+
+	h := &IPAddressClaimHandler{
+		client: poolClient(t, claim),
+		claim:  claim,
+		pool:   nil,
+	}
+
+	res, err := h.ReleaseAddress(context.Background())
+	g.Expect(res).To(BeNil())
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(err.Error()).To(ContainSubstring("is gone"))
+}
+
+// A deleted cluster takes its Prism Central credentials Secret with it, so a
+// client can never be built again and retrying only wedges the claim behind a
+// finalizer forever. A NotFound must therefore be terminal: record why, and let
+// the claim go. CAREN's BeforeClusterDelete sweep is the designed backstop.
+func TestReleaseAddressWithGoneCredentialsIsTerminal(t *testing.T) {
+	g := NewWithT(t)
+
+	pool := poolWithCredentials()
+	claim := testClaim("claim-creds-gone")
+	claim.Status.AddressRef = ipamv1.IPAddressReference{Name: "addr-1"}
+	address := &ipamv1.IPAddress{
+		ObjectMeta: metav1.ObjectMeta{Name: "addr-1", Namespace: poolNamespace},
+	}
+
+	h := &IPAddressClaimHandler{
+		client:         poolClient(t, pool, claim, address),
+		claim:          claim,
+		pool:           pool,
+		secretInformer: emptySecretInformer(),
+	}
+
+	res, err := h.ReleaseAddress(context.Background())
+	g.Expect(err).NotTo(HaveOccurred(), "a retry can never succeed, so it must not be an error")
+	g.Expect(res).To(BeNil())
+
+	cond := meta.FindStatusCondition(claim.Status.Conditions, ReadyCondition)
+	g.Expect(cond).NotTo(BeNil(), "the reason must be recorded on the claim")
+	g.Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+	g.Expect(cond.Reason).To(Equal(ReasonCredentialsGone))
+	g.Expect(cond.Message).To(ContainSubstring("may remain reserved"))
+}
+
+// Any other client failure can recover, so it must stay an error and retry.
+func TestReleaseAddressWithATransientClientFailureRetries(t *testing.T) {
+	g := NewWithT(t)
+
+	pool := poolWithCredentials()
+	claim := testClaim("claim-transient")
+	claim.Status.AddressRef = ipamv1.IPAddressReference{Name: "addr-1"}
+	address := &ipamv1.IPAddress{
+		ObjectMeta: metav1.ObjectMeta{Name: "addr-1", Namespace: poolNamespace},
+	}
+
+	h := &IPAddressClaimHandler{
+		client:         poolClient(t, pool, claim, address),
+		claim:          claim,
+		pool:           pool,
+		secretInformer: secretInformerWith(transientSecret()),
+		pcClientGetter: func(pcclient.CachedClientParams) (pcclient.Client, error) {
+			return nil, errors.New("dial tcp: i/o timeout")
+		},
+	}
+
+	_, err := h.ReleaseAddress(context.Background())
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(meta.FindStatusCondition(claim.Status.Conditions, ReasonCredentialsGone)).To(BeNil())
 }
