@@ -343,8 +343,9 @@ func unreservationAlreadyReleased(err error) bool {
 
 // Subnet represents a subnet in the networking API.
 type Subnet struct {
-	extID  uuid.UUID
-	prefix int32
+	extID   uuid.UUID
+	prefix  int32
+	gateway string
 }
 
 func NewSubnet(extID uuid.UUID, prefix int32) *Subnet {
@@ -352,6 +353,23 @@ func NewSubnet(extID uuid.UUID, prefix int32) *Subnet {
 		extID:  extID,
 		prefix: prefix,
 	}
+}
+
+// NewSubnetWithGateway is NewSubnet plus the subnet's default gateway, which an
+// allocated address carries so that consumers configuring an interface from it
+// have a route. A subnet need not declare one, in which case gateway is empty.
+func NewSubnetWithGateway(extID uuid.UUID, prefix int32, gateway string) *Subnet {
+	return &Subnet{
+		extID:   extID,
+		prefix:  prefix,
+		gateway: gateway,
+	}
+}
+
+// Gateway returns the subnet's default gateway, or an empty string when the
+// subnet does not declare one.
+func (s *Subnet) Gateway() string {
+	return s.gateway
 }
 
 // ExtID returns the external ID of the subnet.
@@ -495,7 +513,7 @@ func newSubnetFromAPI(apiSubnet *networkingapi.Subnet, description string) (*Sub
 		return nil, err
 	}
 
-	return NewSubnet(subnetUUID, prefix), nil
+	return NewSubnetWithGateway(subnetUUID, prefix, subnetGateway(apiSubnet)), nil
 }
 
 func subnetPrefix(apiSubnet *networkingapi.Subnet, description string) (int32, error) {
@@ -522,6 +540,23 @@ func subnetPrefix(apiSubnet *networkingapi.Subnet, description string) (int32, e
 		}
 	}
 	return 0, fmt.Errorf("no IP prefix found for %s", description)
+}
+
+// subnetGateway returns the subnet's default gateway. It is best effort: a
+// subnet is allowed not to declare one, and an address without a gateway is
+// still usable, so this never fails the lookup.
+func subnetGateway(apiSubnet *networkingapi.Subnet) string {
+	for _, ipConfig := range apiSubnet.IpConfig {
+		if ipConfig.Ipv4 != nil && ipConfig.Ipv4.DefaultGatewayIp != nil &&
+			ipConfig.Ipv4.DefaultGatewayIp.Value != nil {
+			return *ipConfig.Ipv4.DefaultGatewayIp.Value
+		}
+		if ipConfig.Ipv6 != nil && ipConfig.Ipv6.DefaultGatewayIp != nil &&
+			ipConfig.Ipv6.DefaultGatewayIp.Value != nil {
+			return *ipConfig.Ipv6.DefaultGatewayIp.Value
+		}
+	}
+	return ""
 }
 
 func prefixLengthToInt32(prefixLength int, description string) (int32, error) {
