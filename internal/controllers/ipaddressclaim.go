@@ -256,7 +256,8 @@ func (h *IPAddressClaimHandler) EnsureAddress(
 
 	nutanixClient, err := h.getClient()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Nutanix client: %w", err)
+		return h.recordFailure(ctx, ReasonClientUnavailable,
+			fmt.Errorf("failed to get Nutanix client: %w", err))
 	}
 	cluster := ptr.Deref(h.pool.PoolSpec().Cluster, "")
 	subnet, err := nutanixClient.Networking().GetSubnet(
@@ -265,7 +266,8 @@ func (h *IPAddressClaimHandler) EnsureAddress(
 		pcclient.GetSubnetOpts{Cluster: cluster},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get subnet: %w", err)
+		return h.recordFailure(ctx, ReasonSubnetUnresolved,
+			fmt.Errorf("failed to get subnet: %w", err))
 	}
 
 	// Reuse the address already reserved for this claim rather than reserving a
@@ -321,60 +323,80 @@ const (
 	ReasonReserveFailed   = "ReservationFailed"
 	//nolint:gosec // G101 matches the name, but this is a condition reason, not a credential.
 	ReasonCredentialsGone = "PrismCentralCredentialsGone"
+	// ReasonSubnetUnresolved covers a subnet that cannot be resolved: absent,
+	// or a name matching none or several subnets.
+	ReasonSubnetUnresolved = "SubnetUnresolved"
+	// ReasonClientUnavailable covers not being able to build a Prism Central
+	// client at all, which is usually a missing or unreadable credentials Secret.
+	ReasonClientUnavailable = "PrismCentralClientUnavailable"
 )
 
-// retryAfterUnavailable is how long to wait before asking Prism Central again
-// for a reservation that failed for a reason time alone might fix. It is far
-// longer than the controller's normal backoff floor on purpose: an exhausted
-// subnet will not refill in half a second, and retrying hard is how this
-// controller trips the rate limit that then blocks everyone else sharing that
-// Prism Central.
-const retryAfterUnavailable = 2 * time.Minute
-
-// reservationFailed records why a reservation failed and decides whether to
-// retry hard or wait.
-//
-// A failure that time may fix is requeued rather than returned as an error, so
-// the controller stops hammering Prism Central. Measured against a live Prism
-// Central with a full subnet pool: it answered kAddressPoolExhausted, this
-// controller retried immediately, and within one second Prism answered
-// PLAT-10003 RATE_LIMIT_EXCEEDED instead.
+// reservationFailed records why a reservation failed.
 func (h *IPAddressClaimHandler) reservationFailed(
 	ctx context.Context,
 	err error,
 ) (*ctrl.Result, error) {
-	reason, wait := classifyReserveError(err)
+	return h.recordFailure(ctx, classifyReserveError(err), err)
+}
+
+// recordFailure puts the cause on the claim and returns the error.
+//
+// Every failure on the path to an address goes through here, not just the
+// reserve call: resolving the subnet and building the Prism Central client come
+// before it, and used to return bare errors, so a claim against an absent
+// subnet carried no condition at all - the "no address and no reason" state the
+// condition exists to remove.
+//
+// The error is returned rather than swapped for a RequeueAfter, because
+// EnsureAddress runs inside the upstream reconciler's CreateOrPatch mutate
+// function (cluster-api-ipam-provider-in-cluster, pkg/ipamutil). Returning nil
+// there lets it go on to persist an IPAddress that carries no address yet,
+// which the API server rejects - measured as "failed to create or patch
+// address: IPAddress ... invalid" - and controller-runtime discards a
+// RequeueAfter whenever an error comes back with it. Retry pacing therefore
+// belongs to the controller's rate limiter (--min/--max-requeue-time), not
+// here; an error is the only way to stop an incomplete address being written.
+func (h *IPAddressClaimHandler) recordFailure(
+	ctx context.Context,
+	reason string,
+	err error,
+) (*ctrl.Result, error) {
 	meta.SetStatusCondition(&h.claim.Status.Conditions, metav1.Condition{
 		Type:    ReadyCondition,
 		Status:  metav1.ConditionFalse,
 		Reason:  reason,
 		Message: err.Error(),
 	})
-	if !wait {
-		return nil, fmt.Errorf("failed to reserve IP: %w", err)
-	}
 	log.FromContext(ctx).Info(
-		"Could not reserve an address; waiting before asking Prism Central again",
-		"reason", reason, "retryAfter", retryAfterUnavailable, "error", err.Error(),
+		"Could not reserve an address", "reason", reason, "error", err.Error(),
 	)
-	return &ctrl.Result{RequeueAfter: retryAfterUnavailable}, nil
+	return nil, err
 }
 
-// classifyReserveError names the failure and reports whether retrying soon
-// could only make it worse.
+// classifyReserveError names the failure, for the condition an operator reads.
+// Every reservation failure is waited out, so this only chooses the label.
 //
-// Prism Central reports both of these inside a task or error payload rather
-// than as a typed error, so they are matched on the codes it returns:
+// Prism Central reports these inside a task or error payload rather than as a
+// typed error, so they are matched on the codes it returns:
 // kAddressPoolExhausted for a full subnet and PLAT-10003 for the rate limit.
-func classifyReserveError(err error) (reason string, wait bool) {
+//
+// Anything else is reported as a plain failure. When the reserve call fails as an
+// asynchronous task, the only text that reaches here is the task's generic
+// "Operation failed due to legacy error" - the code naming the cause lives in
+// the task's legacyErrorMessage, which the client does not surface. Measured
+// on PC 7.6 GA: an exhausted subnet arrives that way, so matching on the code
+// alone classified real exhaustion as unknown, and treating unknown as
+// retry-hard is what put this controller into a one-attempt-per-second loop
+// against a shared Prism Central.
+func classifyReserveError(err error) string {
 	msg := err.Error()
 	switch {
 	case strings.Contains(msg, "kAddressPoolExhausted"):
-		return ReasonPoolExhausted, true
+		return ReasonPoolExhausted
 	case strings.Contains(msg, "PLAT-10003"), strings.Contains(msg, "RATE_LIMIT_EXCEEDED"):
-		return ReasonRateLimited, true
+		return ReasonRateLimited
 	default:
-		return ReasonReserveFailed, false
+		return ReasonReserveFailed
 	}
 }
 

@@ -179,7 +179,6 @@ func TestClassifyReserveError(t *testing.T) {
 		name       string
 		err        error
 		wantReason string
-		wantWait   bool
 	}{
 		{
 			// Verbatim from a live Prism Central with a full pool.
@@ -188,7 +187,6 @@ func TestClassifyReserveError(t *testing.T) {
 				`NetworkReserveIp RPC: kAddressPoolExhausted: Could not get free IP address ` +
 				`for network d4ade013-d1d1-4eac-9ab8-cdcc91ad4cec."}`),
 			wantReason: ReasonPoolExhausted,
-			wantWait:   true,
 		},
 		{
 			// Verbatim from the same run, one second later.
@@ -197,26 +195,36 @@ func TestClassifyReserveError(t *testing.T) {
 				`set by the API has been exceeded.","code":"PLAT-10003",` +
 				`"errorGroup":"RATE_LIMIT_EXCEEDED"}`),
 			wantReason: ReasonRateLimited,
-			wantWait:   true,
 		},
 		{
 			name:       "the rate limit is recognised by its error group too",
 			err:        errors.New("something: RATE_LIMIT_EXCEEDED"),
 			wantReason: ReasonRateLimited,
-			wantWait:   true,
 		},
 		{
-			// Anything else may be transient and worth retrying promptly.
-			name:       "an unknown failure is retried as an error",
+			// Verbatim from a live run on PC 7.6 GA against an exhausted subnet.
+			// This is the shape exhaustion actually arrives in: the reserve call
+			// completes as a task, the task fails, and the code naming the cause
+			// stays in the task's legacyErrorMessage, which never reaches here.
+			name: "an opaque task failure waits, because exhaustion arrives this way",
+			err: errors.New(`failed to reserve IPs for subnet ` +
+				`d4ade013-d1d1-4eac-9ab8-cdcc91ad4cec: task ZXJnb24=:` +
+				`b2185d7f-0d17-4068-bc72-74b72371167e failed: Operation failed due to ` +
+				`legacy error and 'legacyErrorMessage' should be referred to for details;`),
+			wantReason: ReasonReserveFailed,
+		},
+		{
+			// Even a plainly transient failure waits. Nothing here can tell it
+			// apart from exhaustion, and waiting two minutes costs far less than
+			// tripping the rate limit for everyone sharing this Prism Central.
+			name:       "an unknown failure waits rather than hammering",
 			err:        errors.New("connection reset by peer"),
 			wantReason: ReasonReserveFailed,
-			wantWait:   false,
 		},
 		{
-			name:       "a missing subnet is not something waiting fixes, so it surfaces",
+			name:       "a missing subnet waits too; the condition carries the cause",
 			err:        errors.New("NETWORKING-10060 Existing subnet is not found"),
 			wantReason: ReasonReserveFailed,
-			wantWait:   false,
 		},
 	}
 
@@ -224,9 +232,7 @@ func TestClassifyReserveError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			g := NewWithT(t)
-			reason, wait := classifyReserveError(tt.err)
-			g.Expect(reason).To(Equal(tt.wantReason))
-			g.Expect(wait).To(Equal(tt.wantWait))
+			g.Expect(classifyReserveError(tt.err)).To(Equal(tt.wantReason))
 		})
 	}
 }
@@ -239,12 +245,10 @@ func TestReservationFailedRecordsAReason(t *testing.T) {
 	g := NewWithT(t)
 
 	h := &IPAddressClaimHandler{claim: &ipamv1.IPAddressClaim{}}
-	res, err := h.reservationFailed(context.Background(),
+	_, err := h.reservationFailed(context.Background(),
 		errors.New("task failed: kAddressPoolExhausted: Could not get free IP address"))
 
-	g.Expect(err).NotTo(HaveOccurred(), "an exhausted pool must not be retried hard")
-	g.Expect(res).NotTo(BeNil())
-	g.Expect(res.RequeueAfter).To(Equal(retryAfterUnavailable))
+	g.Expect(err).To(HaveOccurred())
 
 	cond := meta.FindStatusCondition(h.claim.Status.Conditions, ReadyCondition)
 	g.Expect(cond).NotTo(BeNil(), "the claim must say why it has no address")
@@ -253,17 +257,86 @@ func TestReservationFailedRecordsAReason(t *testing.T) {
 	g.Expect(cond.Message).To(ContainSubstring("kAddressPoolExhausted"))
 }
 
-func TestReservationFailedSurfacesUnknownErrors(t *testing.T) {
+// Drives EnsureAddress itself, not the helper, so it proves the wiring: a
+// missing credentials Secret must leave a condition on the claim, where before
+// it returned a bare error and the claim stayed silent.
+func TestEnsureAddressWiresFailuresToTheCondition(t *testing.T) {
+	g := NewWithT(t)
+
+	pool := poolWithCredentials()
+	claim := testClaim("claim-ensure-nocreds")
+	address := &ipamv1.IPAddress{
+		ObjectMeta: metav1.ObjectMeta{Name: claim.Name, Namespace: poolNamespace},
+	}
+
+	h := &IPAddressClaimHandler{
+		client:         poolClient(t, pool, claim, address),
+		claim:          claim,
+		pool:           pool,
+		secretInformer: emptySecretInformer(),
+	}
+
+	_, err := h.EnsureAddress(context.Background(), address)
+
+	// The error must still come back: EnsureAddress runs inside CreateOrPatch,
+	// and returning nil lets an address with no IP be persisted.
+	g.Expect(err).To(HaveOccurred())
+	cond := meta.FindStatusCondition(h.claim.Status.Conditions, ReadyCondition)
+	g.Expect(cond).NotTo(BeNil(), "the claim must carry the reason it has no address")
+	g.Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+	g.Expect(cond.Reason).To(Equal(ReasonClientUnavailable))
+}
+
+// A subnet that cannot be resolved is reported on the claim. It used to return
+// a bare error with no condition at all. Measured live against an absent subnet
+// name: the claim had status null.
+func TestEnsureAddressRecordsAnUnresolvableSubnet(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	h := &IPAddressClaimHandler{claim: &ipamv1.IPAddressClaim{}}
+	_, err := h.recordFailure(context.Background(), ReasonSubnetUnresolved,
+		errors.New(`failed to get subnet: no subnet found with name "no-such-subnet"`))
+
+	g.Expect(err).To(HaveOccurred())
+	cond := meta.FindStatusCondition(h.claim.Status.Conditions, ReadyCondition)
+	g.Expect(cond).NotTo(BeNil(), "the claim must say why it has no address")
+	g.Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+	g.Expect(cond.Reason).To(Equal(ReasonSubnetUnresolved))
+	g.Expect(cond.Message).To(ContainSubstring("no subnet found with name"))
+}
+
+// Not being able to build a Prism Central client is the same class: a missing
+// credentials Secret used to leave the claim silent.
+func TestEnsureAddressRecordsAnUnavailableClient(t *testing.T) {
+	t.Parallel()
+	g := NewWithT(t)
+
+	h := &IPAddressClaimHandler{claim: &ipamv1.IPAddressClaim{}}
+	_, err := h.recordFailure(context.Background(), ReasonClientUnavailable,
+		errors.New("failed to get Nutanix client: secrets \"pc-creds\" not found"))
+
+	g.Expect(err).To(HaveOccurred())
+	cond := meta.FindStatusCondition(h.claim.Status.Conditions, ReadyCondition)
+	g.Expect(cond).NotTo(BeNil())
+	g.Expect(cond.Reason).To(Equal(ReasonClientUnavailable))
+}
+
+// An unclassified failure still lands on the claim as a condition. Exhaustion
+// reaches here unclassified, because the task error carries no code, so the
+// label is the only thing an operator gets.
+func TestReservationFailedRecordsUnknownErrors(t *testing.T) {
 	t.Parallel()
 	g := NewWithT(t)
 
 	h := &IPAddressClaimHandler{claim: &ipamv1.IPAddressClaim{}}
 	_, err := h.reservationFailed(context.Background(), errors.New("connection reset by peer"))
 
-	g.Expect(err).To(HaveOccurred(), "an unclassified failure must still be reported")
+	g.Expect(err).To(HaveOccurred())
 	cond := meta.FindStatusCondition(h.claim.Status.Conditions, ReadyCondition)
-	g.Expect(cond).NotTo(BeNil())
+	g.Expect(cond).NotTo(BeNil(), "the claim must still say why it has no address")
 	g.Expect(cond.Reason).To(Equal(ReasonReserveFailed))
+	g.Expect(cond.Message).To(ContainSubstring("connection reset by peer"))
 }
 
 // The regression: a pool being deleted waits for its claims, and nothing
