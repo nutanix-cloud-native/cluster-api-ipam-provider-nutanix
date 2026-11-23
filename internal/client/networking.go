@@ -299,7 +299,7 @@ type UnreserveIPOpts struct {
 func (n *networkingClient) UnreserveIPs(
 	ctx context.Context, unreserveType IPUnreservationTypeFunc, subnet string, opts UnreserveIPOpts,
 ) ([]netip.Addr, error) {
-	apiSubnet, err := n.GetSubnet(ctx, subnet, GetSubnetOpts{Cluster: opts.Cluster})
+	apiSubnet, err := n.GetSubnet(ctx, subnet, GetSubnetOpts(opts))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get subnet %s: %w", subnet, err)
 	}

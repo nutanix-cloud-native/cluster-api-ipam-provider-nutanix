@@ -246,7 +246,8 @@ func (h *IPAddressClaimHandler) EnsureAddress(
 	err := h.client.Get(ctx, ctrlclient.ObjectKeyFromObject(address), existing)
 	switch {
 	case err == nil:
-		if existing.Spec.Address != "" && existing.Spec.Prefix != nil && *existing.Spec.Prefix != 0 {
+		if existing.Spec.Address != "" && existing.Spec.Prefix != nil &&
+			*existing.Spec.Prefix != 0 {
 			return nil, nil
 		}
 	case !apierrors.IsNotFound(err):
@@ -318,6 +319,7 @@ const (
 	ReasonPoolExhausted   = "SubnetPoolExhausted"
 	ReasonRateLimited     = "PrismCentralRateLimited"
 	ReasonReserveFailed   = "ReservationFailed"
+	//nolint:gosec // G101 matches the name, but this is a condition reason, not a credential.
 	ReasonCredentialsGone = "PrismCentralCredentialsGone"
 )
 
