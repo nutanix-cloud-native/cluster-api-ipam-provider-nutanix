@@ -13,22 +13,21 @@ const (
 )
 
 // NutanixIPPoolSpec defines the desired state of NutanixIPPool.
-// +kubebuilder:validation:XValidation:message="cluster is required if subnet is not a valid uuid",rule="self.subnet.lowerAscii().matches('^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$') || (has(self.cluster) && self.cluster.size() > 0)"
 type NutanixIPPoolSpec struct {
 	// PrismCentral is the configuration details of the Prism Central instance to use for IPAM.
 	// +kubebuilder:validation:Required
 	PrismCentral PrismCentral `json:"prismCentral"`
 
-	// Subnet is the Nutanix subnet to allocate IPs from.
-	// This must be either a UUID or the name of a subnet.
-	// When a name is used, the Cluster field must be set to the UUID of the PE cluster to use
-	// in order to resolve the name to a UUID.
+	// Subnet is the Nutanix subnet to allocate IPs from, either a UUID or a name.
+	// A name is resolved on Prism Central, narrowed by Cluster when that is set,
+	// and allocation fails if it does not resolve to exactly one subnet.
+	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:Required
 	Subnet string `json:"subnet"`
 
-	// Cluster is the Nutanix PE cluster to use to resolve the Subnet name to a UUID.
-	// Cluster can either be the name or the UUID of the PE cluster.
-	// This field is only required when Subnet is a name rather than a UUID.
+	// Cluster is the Prism Element cluster that disambiguates a Subnet name, as
+	// either a name or a UUID. Leave it unset when the subnet name is unique on
+	// this Prism Central; set it when the same name exists on several clusters.
 	// +kubebuilder:validation:Optional
 	Cluster *string `json:"cluster,omitempty"`
 }
@@ -94,7 +93,7 @@ type NutanixIPPoolStatus struct{}
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:categories=cluster-api
 // +kubebuilder:printcolumn:name="Subnet",type="string",JSONPath=".spec.subnet",description="Subnet to allocate IPs from"
-// +kubebuilder:printcolumn:name="Cluster",type="string",JSONPath=".spec.cluster",description="Optional PE Cluster to allocate IPs from (only required if Subnet is a name rather than a uuid)"
+// +kubebuilder:printcolumn:name="Cluster",type="string",JSONPath=".spec.cluster",description="Optional PE Cluster that disambiguates a Subnet name"
 
 // NutanixIPPool is the Schema for the nutanixippools API.
 type NutanixIPPool struct {
