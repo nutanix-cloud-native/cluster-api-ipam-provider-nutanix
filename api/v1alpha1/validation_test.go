@@ -97,7 +97,10 @@ var _ = DescribeTableSubtree(
 		Cluster: new("example-cluster-name"),
 	}, false),
 
-	Entry("failure with missing cluster and named subnet", v1alpha1.NutanixIPPoolSpec{
+	// A name without a cluster is the simple case: the name is unique on this
+	// Prism Central. Whether it really is cannot be known at admission, so it is
+	// resolved when an address is allocated and fails there if it is ambiguous.
+	Entry("success with named subnet and no cluster", v1alpha1.NutanixIPPoolSpec{
 		PrismCentral: v1alpha1.PrismCentral{
 			Address: "127.0.0.1",
 			Port:    9440,
@@ -106,6 +109,19 @@ var _ = DescribeTableSubtree(
 			},
 		},
 		Subnet: "example-subnet-name",
+	}, false),
+
+	// An empty subnet can never resolve, so it is refused here rather than at
+	// allocation time.
+	Entry("failure with empty subnet", v1alpha1.NutanixIPPoolSpec{
+		PrismCentral: v1alpha1.PrismCentral{
+			Address: "127.0.0.1",
+			Port:    9440,
+			CredentialsSecretRef: v1alpha1.LocalSecretRef{
+				Name: "test-secret",
+			},
+		},
+		Subnet: "",
 	}, true),
 
 	Entry("failure with both additionalTrustBundle data and ref set", v1alpha1.NutanixIPPoolSpec{
