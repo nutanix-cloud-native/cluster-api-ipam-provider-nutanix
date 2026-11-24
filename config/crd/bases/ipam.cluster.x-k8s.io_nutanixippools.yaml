@@ -23,8 +23,7 @@ spec:
       jsonPath: .spec.subnet
       name: Subnet
       type: string
-    - description: Optional PE Cluster to allocate IPs from (only required if Subnet
-        is a name rather than a uuid)
+    - description: Optional PE Cluster that disambiguates a Subnet name
       jsonPath: .spec.cluster
       name: Cluster
       type: string
@@ -55,9 +54,9 @@ spec:
             properties:
               cluster:
                 description: |-
-                  Cluster is the Nutanix PE cluster to use to resolve the Subnet name to a UUID.
-                  Cluster can either be the name or the UUID of the PE cluster.
-                  This field is only required when Subnet is a name rather than a UUID.
+                  Cluster is the Prism Element cluster that disambiguates a Subnet name, as
+                  either a name or a UUID. Leave it unset when the subnet name is unique on
+                  this Prism Central; set it when the same name exists on several clusters.
                 type: string
               prismCentral:
                 description: PrismCentral is the configuration details of the Prism
@@ -119,19 +118,15 @@ spec:
                 type: object
               subnet:
                 description: |-
-                  Subnet is the Nutanix subnet to allocate IPs from.
-                  This must be either a UUID or the name of a subnet.
-                  When a name is used, the Cluster field must be set to the UUID of the PE cluster to use
-                  in order to resolve the name to a UUID.
+                  Subnet is the Nutanix subnet to allocate IPs from, either a UUID or a name.
+                  A name is resolved on Prism Central, narrowed by Cluster when that is set,
+                  and allocation fails if it does not resolve to exactly one subnet.
+                minLength: 1
                 type: string
             required:
             - prismCentral
             - subnet
             type: object
-            x-kubernetes-validations:
-            - message: cluster is required if subnet is not a valid uuid
-              rule: self.subnet.lowerAscii().matches('^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$')
-                || (has(self.cluster) && self.cluster.size() > 0)
           status:
             description: NutanixIPPoolStatus defines the observed state of NutanixIPPool.
             type: object
